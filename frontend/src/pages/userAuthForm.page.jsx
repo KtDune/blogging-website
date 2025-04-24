@@ -2,12 +2,64 @@ import { Link } from "react-router-dom"
 import InputBox from "../components/input.component"
 import googleIcon from '../imgs/google.png'
 import AnimationWrapper from "../common/page-animation"
+import { useRef } from "react"
+import { Toaster, toast } from "react-hot-toast"
+import axios from 'axios'
 
 const UserAuthForm = (props) => {
+    let emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/; // regex for email
+    let passwordRegex = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{6,20}$/; // regex for password
+
+    const userAuthThroughServer = (route, formData) => {
+        axios.post(import.meta.env.VITE_SERVER_DOMAIN + route, formData)
+        .then(({ data }) => console.log(data))
+        .catch(({ response }) => toast.error(response.data.error))
+    }
+
+    const handleSubmit = (e) => {
+        e.preventDefault() // Prevent fomr from submitting
+
+        // Retrieve form data
+        let form = new FormData(authForm)
+        let formData = {} // Even we have a FormData object, its content can only be retrieved via a loop for security reasons.
+
+        for (let [key, value] of form.entries()) {
+            formData[key] = value
+        }
+
+        let { fullName, email, password } = formData
+
+        // validating data from frontend
+        if (fullName && fullName.length < 3) {
+            return toast.error('Full name must be at least 3 letters long')
+        }
+
+        if (!email.length) {
+            return toast.error('Please enter an email')
+        }
+
+        if (!emailRegex.test(email)) {
+            return toast.error('Invalid email format')
+        }
+
+        if (!password) {
+            return toast.error('Please enter a password')
+        }
+
+        if (!passwordRegex.test(password)) {
+            return toast.error('Password should be 6 to 20 characters long with a numeric, 1 lowercase and 1 uppercase letters')
+        }
+
+        let route = props.type === 'sign-in' ? '/signin' : '/signup'
+
+        userAuthThroughServer(route, formData)
+    }
+
     return (
         <AnimationWrapper keyValue={props.type}>
             <section className="h-cover flex items-center justify-center">
-                <form className="w-[8-%] max-w-[400px]">
+                <Toaster />
+                <form id="authForm" className="w-[8-%] max-w-[400px]">
                     <h1 className="text-4xl font-gelasio capitalize text-center mb:24">
                         {props.type === 'sign-up' ? 'Join Us Today!' : 'Welcome Back!'}
                     </h1>
@@ -34,7 +86,9 @@ const UserAuthForm = (props) => {
                         icon={'fi-rr-key'}
                         placeholder={'Password'} />
 
-                    <button type="submit" className="btn-dark center mt-14">
+                    <button type="submit"
+                        onClick={handleSubmit}
+                        className="btn-dark center mt-14">
                         {props.type.replace('-', ' ')}
                     </button>
 
