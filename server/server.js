@@ -5,6 +5,8 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcrypt'
 import { nanoid } from 'nanoid';
 import cors from 'cors'
+import admin from 'firebase-admin'
+import { getAuth } from 'firebase-admin/auth'
 
 import User from './Schema/User.js'
 
@@ -16,6 +18,10 @@ let passwordRegex = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{6,20}$/; // regex for pass
 
 server.use(express.json())
 server.use(cors())
+
+admin.initializeApp({
+    credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_ADMIN_JSON))
+})
 
 mongoose.connect(process.env.DB_LOCATION, {
     autoIndex: true,
@@ -93,28 +99,77 @@ server.post('/signin', async (req, res) => {
         const result = await User.findOne({ "personal_info.email": email })
 
         if (!result) {
-            console.log(err.message)
+            console.error(err.message)
 
             return res.status(403).json({ error: "User not found" })
         }
 
-        bcrypt.compare(password, result.personal_info.password, (err, hashResult) => {
-            if (err) {
-                return res.status(403).json({ error: "Error occured while login please try again" })
-            }
+        if (!result.google_auth) {
+            bcrypt.compare(password, result.personal_info.password, (err, hashResult) => {
+                if (err) {
+                    return res.status(403).json({ error: "Error occured while login please try again" })
+                }
 
-            if (!hashResult) {
-                return res.status(403).json({ error: "Incorrect password" }) 
-            }
-            else {
-                return res.status(200).json(formatResult(result))
+                if (!hashResult) {
+                    return res.status(403).json({ error: "Incorrect password" })
+                }
+                else {
+                    return res.status(200).json(formatResult(result))
 
-            }
-        })
+                }
+            })
+        }
+        else {
+            return res.status(403).json({ error: 'Account was created using Google. Try logging in with Google.' })
+        }
     }
     catch (err) {
         return res.status(500).json({ error: "User not found" })
     }
+})
+
+server.post('/google-auth', async (req, res) => {
+    const { access_token } = req.body
+
+    getAuth()
+        .verifyIdToken(access_token)
+        .then(async (decodeduser) => {
+
+            let { email, name, picture } = decodeduser
+
+            picture = picture.replace('s96-c', 's384-c')
+
+            let user = await User
+                .findOne({ "personal_info.email": email })
+                .select('personal_info.fullname personal_info.username personal_info.profile_img google_auth')
+                .then((u) => { return u || null })
+                .catch((err) => res.status(500).json({ error: err.message }))
+
+            if (user) {
+                if (!user.google_auth) {
+                    res.status(403).json({ error: 'This account was signned in without Google. Please use an email and password to sign in.' })
+                }
+            }
+            else {
+
+                let username = await generateUsername(email)
+
+                user = new User({
+                    personal_info: { fullname: name, email, username, },
+                    google_auth: true,
+                })
+
+                await user.save().then((u) => {
+                    user = u
+                })
+                    .catch((err) => {
+                        return res.status(500).json({ error: err.message })
+                    })
+            }
+
+            return res.status(200).json(formatResult(user))
+        })
+        .catch((err) => res.status(500).json({ error: err.message }))
 })
 
 server.listen(PORT, () => {

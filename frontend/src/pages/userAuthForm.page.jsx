@@ -1,19 +1,49 @@
-import { Link } from "react-router-dom"
+import { Link, Navigate } from "react-router-dom"
 import InputBox from "../components/input.component"
 import googleIcon from '../imgs/google.png'
 import AnimationWrapper from "../common/page-animation"
-import { useRef } from "react"
+import { useContext } from "react"
 import { Toaster, toast } from "react-hot-toast"
 import axios from 'axios'
+import { storeInSession } from "../common/session"
+import { UserContext } from "../App"
+import { authWithGoogle } from "../common/firebase"
 
 const UserAuthForm = (props) => {
     let emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/; // regex for email
     let passwordRegex = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{6,20}$/; // regex for password
 
+    let { userAuth: { access_token }, setUserAuth } = useContext(UserContext)
+
     const userAuthThroughServer = (route, formData) => {
         axios.post(import.meta.env.VITE_SERVER_DOMAIN + route, formData)
-        .then(({ data }) => console.log(data))
-        .catch(({ response }) => toast.error(response.data.error))
+            .then(({ data }) => {
+                storeInSession("user", JSON.stringify(data))
+
+                setUserAuth(data)
+            })
+            .catch(({ response }) => toast.error(response.data.error))
+    }
+
+    const handleGoogleAuth = async (e) => {
+        e.preventDefault
+
+        try {
+            const result = await authWithGoogle()
+
+            if (result) {
+                let serverRoute = '/google-auth'
+
+                let formData = {
+                    access_token: result.accessToken,
+                }
+
+                userAuthThroughServer(serverRoute, formData)
+            }
+        }
+        catch (err) {
+            toast.error('Trouble login into user')
+        }
     }
 
     const handleSubmit = (e) => {
@@ -56,70 +86,76 @@ const UserAuthForm = (props) => {
     }
 
     return (
-        <AnimationWrapper keyValue={props.type}>
-            <section className="h-cover flex items-center justify-center">
-                <Toaster />
-                <form id="authForm" className="w-[8-%] max-w-[400px]">
-                    <h1 className="text-4xl font-gelasio capitalize text-center mb:24">
-                        {props.type === 'sign-up' ? 'Join Us Today!' : 'Welcome Back!'}
-                    </h1>
+        access_token
+            ? <Navigate to='/' />
+            : (<AnimationWrapper keyValue={props.type}>
+                <section className="h-cover flex items-center justify-center">
+                    <Toaster />
+                    <form id="authForm" className="w-[8-%] max-w-[400px]">
+                        <h1 className="text-4xl font-gelasio capitalize text-center mb:24">
+                            {props.type === 'sign-up' ? 'Join Us Today!' : 'Welcome Back!'}
+                        </h1>
 
-                    {
-                        props.type === 'sign-in'
-                            ? ''
-                            : <InputBox
-                                type={'text'}
-                                name={'fullName'}
-                                icon={'fi-rr-user'}
-                                placeholder={'Full Name'} />
-                    }
+                        {
+                            props.type === 'sign-in'
+                                ? ''
+                                : <InputBox
+                                    type={'text'}
+                                    name={'fullName'}
+                                    icon={'fi-rr-user'}
+                                    placeholder={'Full Name'} />
+                        }
 
-                    <InputBox
-                        type={'email'}
-                        name={'email'}
-                        icon={'fi-rr-envelope'}
-                        placeholder={'Email'} />
+                        <InputBox
+                            type={'email'}
+                            name={'email'}
+                            icon={'fi-rr-envelope'}
+                            placeholder={'Email'} />
 
-                    <InputBox
-                        type={'password'}
-                        name={'password'}
-                        icon={'fi-rr-key'}
-                        placeholder={'Password'} />
+                        <InputBox
+                            type={'password'}
+                            name={'password'}
+                            icon={'fi-rr-key'}
+                            placeholder={'Password'} />
 
-                    <button type="submit"
-                        onClick={handleSubmit}
-                        className="btn-dark center mt-14">
-                        {props.type.replace('-', ' ')}
-                    </button>
+                        <button type="submit"
+                            onClick={handleSubmit}
+                            className="btn-dark center mt-14">
+                            {props.type.replace('-', ' ')}
+                        </button>
 
-                    <div className="relative w-full flex items-center gap-2 my-10 pacity-10 uppercase text-black font-bold">
-                        <hr className="w-1/2 border-black" />
-                        <p>or</p>
-                        <hr className="w-1/2 border-black" />
-                    </div>
-                    <button className="btn-dark flex items-center justify-center gap-4 w-[90%] center">
-                        <img src={googleIcon} className="w-5" />
-                        Continue with Google
-                    </button>
+                        <div className="relative w-full flex items-center gap-2 my-10 pacity-10 uppercase text-black font-bold">
+                            <hr className="w-1/2 border-black" />
+                            <p>or</p>
+                            <hr className="w-1/2 border-black" />
+                        </div>
+                        <button
+                        type="button"
+                            className="btn-dark flex items-center justify-center gap-4 w-[90%] center"
+                            onClick={handleGoogleAuth}
+                        >
+                            <img src={googleIcon} className="w-5" />
+                            Continue with Google
+                        </button>
 
-                    {
-                        props.type === 'sign-in'
-                            ?
-                            (
-                                <p className="mt-6 text-dark-grey text-xl text-center">
-                                    Don't have an account? <Link to={'/signup'} className="underline text-black text-xl ml-1">Sign Up</Link>
-                                </p>
-                            )
-                            :
-                            (
-                                <p className="mt-6 text-dark-grey text-xl text-center">
-                                    Already a member? <Link to={'/signin'} className="underline text-black text-xl ml-1">Sign In</Link>
-                                </p>
-                            )
-                    }
-                </form>
-            </section>
-        </AnimationWrapper>
+                        {
+                            props.type === 'sign-in'
+                                ?
+                                (
+                                    <p className="mt-6 text-dark-grey text-xl text-center">
+                                        Don't have an account? <Link to={'/signup'} className="underline text-black text-xl ml-1">Sign Up</Link>
+                                    </p>
+                                )
+                                :
+                                (
+                                    <p className="mt-6 text-dark-grey text-xl text-center">
+                                        Already a member? <Link to={'/signin'} className="underline text-black text-xl ml-1">Sign In</Link>
+                                    </p>
+                                )
+                        }
+                    </form>
+                </section>
+            </AnimationWrapper>)
     )
 }
 
