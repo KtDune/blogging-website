@@ -1,8 +1,1 @@
-POST http://localhost:8080/signin
-Content-Type: application/json
-
-{
-    "fullName": "khai",
-    "email": "jiji@yahoo.co",
-    "password": "Kummar123"
-}
+GET http://localhost:8080/get-upload-url

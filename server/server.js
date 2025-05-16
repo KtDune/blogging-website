@@ -7,6 +7,7 @@ import { nanoid } from 'nanoid';
 import cors from 'cors'
 import admin from 'firebase-admin'
 import { getAuth } from 'firebase-admin/auth'
+import aws from 'aws-sdk'
 
 import User from './Schema/User.js'
 
@@ -26,6 +27,25 @@ admin.initializeApp({
 mongoose.connect(process.env.DB_LOCATION, {
     autoIndex: true,
 })
+
+const s3 = new aws.S3({
+    region: 'ap-southeast-5',
+    accessKeyId: process.env.AWS_ACCESS_KEY, 
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+})
+
+const generateUpoadUrl = async () => {
+
+    const date = new Date()
+    const  imgName = `${nanoid()}-${date.getTime()}.jpeg`
+
+    return await s3.getSignedUrlPromise('putObject', {
+        Bucket: 'angryxuen',
+        Key: imgName,
+        Expires: 1000,
+        ContentType: 'image/jpeg',
+    })
+}
 
 const generateUsername = async (email) => {
     let username = email.split('@')[0]
@@ -170,6 +190,14 @@ server.post('/google-auth', async (req, res) => {
             return res.status(200).json(formatResult(user))
         })
         .catch((err) => res.status(500).json({ error: err.message }))
+})
+
+server.get('/get-upload-url', (req, res) => {
+
+    generateUpoadUrl()
+    .then((url) => res.status(200).json({ uploadURL: url }))
+    .catch((err) => res.status(500).json({ error: err.message }) )
+
 })
 
 server.listen(PORT, () => {
