@@ -192,14 +192,6 @@ server.post('/google-auth', async (req, res) => {
         .catch((err) => res.status(500).json({ error: err.message }))
 })
 
-server.get('/get-upload-url', (req, res) => {
-
-    generateUpoadUrl()
-    .then((url) => res.status(200).json({ uploadURL: url }))
-    .catch((err) => res.status(500).json({ error: err.message }) )
-
-})
-
 server.listen(PORT, () => {
     console.log(`Listening on port ${PORT}`)
 })
