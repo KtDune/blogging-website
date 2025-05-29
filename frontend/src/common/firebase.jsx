@@ -46,7 +46,7 @@ export const uploadImage = async (image) => {
 
     try {
         const imgName = image.name || `file_${new Date().getTime()}`
-        const imageRef = ref(storage, `bannerImg/${imgName}`)
+        const imageRef = ref(storage, `bannerImg/${new Date().getTime()}_${imgName}`)
 
         const uploadRef = await uploadBytes(imageRef, image)
 
