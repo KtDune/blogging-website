@@ -3,11 +3,16 @@ import AnimationWrapper from "../common/page-animation"
 import { useContext } from "react"
 import { EditorContext } from "../pages/editor.pages"
 import Tag from "./tags.component"
+import { UserContext } from "../App"
+import { useNavigate } from "react-router-dom"
+import axios from 'axios'
 
 const PublishForm = () => {
     const characterLimit = 200
     const tagLimit = 10
-    const { blog, blog: { banner, title, text, tags, des }, setEditorState, setBlog } = useContext(EditorContext)
+    const { blog, blog: { banner, title, content, tags, des }, setEditorState, setBlog } = useContext(EditorContext)
+    const { userAuth: { access_token } } = useContext(UserContext)
+    const navigate = useNavigate()
 
     const handleCloseEvent = () => {
         setEditorState('editor')
@@ -16,13 +21,13 @@ const PublishForm = () => {
     const handleBlogTitleChange = (e) => {
         let input = e.target
 
-        setBlog({ ...blog, title: input.value })
+        setBlog(prev => ({ ...prev, title: input.value }))
     }
 
     const handleBlogDescriptionChange = (e) => {
         let input = e.target
 
-        setBlog({ ...blog, des: input.value })
+        setBlog(prev => ({ ...prev, des: input.value }))
     }
 
     const handleTitleKeyDown = (e) => {
@@ -38,7 +43,7 @@ const PublishForm = () => {
             let input = e.target.value
             if (tags.length < tagLimit) {
                 if (!tags.includes(input) && input.length > 0) {
-                    setBlog({ ...blog, tags: [...tags, input] })
+                    setBlog(prev => ({ ...prev, tags: [...tags, input] }))
                 }
             }
             else {
@@ -48,6 +53,52 @@ const PublishForm = () => {
 
             e.target.value = ""
         }
+    }
+
+    const publishBlogFunction = (e) => {
+        if (e.target.className.includes('disable')) {
+            return
+        }
+
+        if (!title.length) {
+            return toast.error('Write blog title before publishing.')
+        }
+
+        if (!des.length || des.length > characterLimit) {
+            return toast.error(`Write description about your blog within ${characterLimit} characters before publishing.`)
+        }
+
+        let loadingToast = toast.loading('Publishing...')
+
+        e.target.classList.add('disable')
+
+        const payload = {
+            title, banner, des, content, tags, draft: false,
+        }
+
+        axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/create-blog`, payload, {
+            headers: {
+                'Authorization': `Bearer ${access_token}`
+            }
+        })
+        .then(() => {
+            e.target.classList.remove('disable')
+
+            toast.dismiss(loadingToast)
+
+            toast.success('Published 👍')
+
+            setTimeout(() => {
+                navigate('/')
+            }, 500)
+        })
+        .catch(({ response }) => {
+            e.target.classList.remove('disable')
+
+            toast.dismiss(loadingToast)
+
+            return toast.error(response.data.error)
+        })
     }
     return (
         <AnimationWrapper>
@@ -114,7 +165,12 @@ const PublishForm = () => {
 
                     <p className="mt-4 text-dark-grey text-sm text-right">{tagLimit - tags.length} tags left</p>
 
-                    <button className="btn-dark px-8">Publish</button>
+                    <button
+                        className="btn-dark px-8"
+                        onClick={publishBlogFunction}
+                    >
+                        Publish
+                    </button>
                 </div>
 
             </section>

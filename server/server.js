@@ -7,9 +7,9 @@ import { nanoid } from 'nanoid';
 import cors from 'cors'
 import admin from 'firebase-admin'
 import { getAuth } from 'firebase-admin/auth'
-import aws from 'aws-sdk'
 
 import User from './Schema/User.js'
+import Blog from './Schema/Blog.js'
 
 const server = express()
 
@@ -28,23 +28,24 @@ mongoose.connect(process.env.DB_LOCATION, {
     autoIndex: true,
 })
 
-const s3 = new aws.S3({
-    region: 'ap-southeast-5',
-    accessKeyId: process.env.AWS_ACCESS_KEY, 
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-})
+const verifyJWT = (req, res, next) => {
 
-const generateUpoadUrl = async () => {
+    const authHeader = req.headers['authorization']
+    const token = authHeader && authHeader.split(' ')[1]
 
-    const date = new Date()
-    const  imgName = `${nanoid()}-${date.getTime()}.jpeg`
+    if (!token) {
+        return res.status(401).json({ error: 'No access token' })
+    }
 
-    return await s3.getSignedUrlPromise('putObject', {
-        Bucket: 'angryxuen',
-        Key: imgName,
-        Expires: 1000,
-        ContentType: 'image/jpeg',
+    jwt.verify(token, process.env.SECRET_ACCESS_KEY, (err, user) => {
+        if (err) {
+            return res.status(403).json({ error: 'Access token is invalid' })
+        }
+
+        req.user = user.id
+        next()
     })
+
 }
 
 const generateUsername = async (email) => {
@@ -144,7 +145,7 @@ server.post('/signin', async (req, res) => {
         }
     }
     catch (err) {
-        return res.status(500).json({ error: "User not found" })
+        return res.status(500).json({ error: error.message })
     }
 })
 
@@ -190,6 +191,56 @@ server.post('/google-auth', async (req, res) => {
             return res.status(200).json(formatResult(user))
         })
         .catch((err) => res.status(500).json({ error: err.message }))
+})
+
+server.post('/create-blog', verifyJWT, (req, res) => {
+
+    let author = req.user
+
+    let { title, des, banner, tags, content, draft } = req.body
+
+    if (!title.length) {
+        return res.status(403).json({ error: 'Please provide a title.' })
+    }
+
+    if (!draft) {
+        if (!des.length || des.length > 200) {
+            return res.status(403).json({ error: 'Please provide description uder 200 characters.' })
+        }
+
+        if (!banner.length) {
+            return res.status(403).json({ error: 'Please provide a banner.' })
+        }
+
+        if (!content.blocks.length) {
+            return res.status(403).json({ error: 'Please provide some content to publish.' })
+        }
+    }
+
+    const blogId = title.replace(/[^a-zA-Z0-9]/g, ' ').replace(/\s+/g, '-').trim() + nanoid()
+
+    const blog = new Blog({
+        title,
+        des,
+        banner,
+        tags,
+        author,
+        blog_id: blogId,
+        draft: Boolean(draft),
+    })
+
+    blog.save().then(blog => {
+        const incermentValue = draft ? 0 : 1
+
+        User.findOneAndUpdate({ _id: author }, {
+            $inc: { "account_info.total_posts": incermentValue }, $push: {
+                "blogs": blog._id
+            }
+        })
+            .then(user => res.status(200).json({ id: blog.blog_id }))
+            .catch(err => res.status(500).json({ error: "Failed to update total posts number." }))
+    })
+        .catch(err => res.status(500).json({ error: err.message }))
 })
 
 server.listen(PORT, () => {

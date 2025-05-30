@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import logo from "../imgs/logo.png"
 import AnimationWrapper from "../common/page-animation"
 import { Toaster, toast } from "react-hot-toast"
@@ -8,6 +8,8 @@ import { EditorContext } from "../pages/editor.pages"
 import defaultBanner from "../imgs/blog banner.png"
 import EditorJS from "@editorjs/editorjs"
 import { tools } from "./tools.component"
+import axios from "axios"
+import { UserContext } from "../App"
 
 const BlogEditor = () => {
     const { blog,
@@ -18,13 +20,19 @@ const BlogEditor = () => {
         setTextEditor,
     } = useContext(EditorContext)
 
+    const { userAuth: { access_token } } = useContext(UserContext)
+    const navigate = useNavigate()
+
     useEffect(() => {
-        setTextEditor(new EditorJS({
-            holder: "textEditor",
-            data: content,
-            tools: tools,
-            placeholder: 'Start your story here...',
-        }))
+        if (!textEditor.isReady) {
+            setTextEditor(new EditorJS({
+                holder: "textEditor",
+                data: content,
+                tools: tools,
+                placeholder: 'Start your story here...',
+            }))
+            console.log("rerender")
+        }
     }, [])
 
     const handlePublishEvent = (e) => {
@@ -43,7 +51,7 @@ const BlogEditor = () => {
         if (textEditor.isReady) {
             textEditor.save().then(data => {
                 if (data.blocks.length) {
-                    setBlog({ ...blog, content: data })
+                    setBlog(prev => ({ ...prev, content: data }))
                     setEditorState("publish")
                 }
                 else {
@@ -72,7 +80,7 @@ const BlogEditor = () => {
         input.style.height = 'auto' // reset height
         input.style.height = input.scrollHeight + 'px'
 
-        setBlog({ ...blog, title: input.value })
+        setBlog(prev => ({ ...prev, title: input.value }))
     }
 
     const handleBannerUpload = async (e) => {
@@ -86,7 +94,7 @@ const BlogEditor = () => {
                 toast.dismiss(loadingToast)
                 toast.success('Uploaded! 👍')
 
-                setBlog({ ...blog, banner: url })
+                setBlog(prev => ({ ...prev, banner: url }))
             }
             else {
                 toast.dismiss(loadingToast)
@@ -99,7 +107,54 @@ const BlogEditor = () => {
         }
     }
 
+    const handleSaveDraft = (e) => {
+        if (e.target.className.includes('disable')) {
+            return
+        }
 
+        if (!title.length) {
+            return toast.error('Write blog title before saving it as a draft.')
+        }
+
+        let loadingToast = toast.loading('Saving draft...')
+
+        e.target.classList.add('disable')
+
+        if (textEditor.isReady) {
+            textEditor.save().then(content => {
+                const payload = {
+                    title, banner, des, content, tags, draft: true,
+                }
+
+                axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/create-blog`, payload, {
+                    headers: {
+                        'Authorization': `Bearer ${access_token}`
+                    }
+                })
+                    .then(() => {
+                        e.target.classList.remove('disable')
+
+                        toast.dismiss(loadingToast)
+
+                        toast.success('Saved 👍')
+
+                        setTimeout(() => {
+                            navigate('/')
+                        }, 500)
+                    })
+                    .catch(({ response }) => {
+                        e.target.classList.remove('disable')
+
+                        toast.dismiss(loadingToast)
+
+                        return toast.error(response.data.error)
+                    })
+
+            })
+        }
+
+
+    }
     return (
         <>
             <Toaster />
@@ -114,7 +169,11 @@ const BlogEditor = () => {
                     <button type="button" className="btn-dark py-2" onClick={handlePublishEvent}>
                         Publish
                     </button>
-                    <button type="button" className="btn-light py-2">
+                    <button
+                        type="button"
+                        className="btn-light py-2"
+                        onClick={handleSaveDraft}
+                    >
                         save Draft
                     </button>
                 </div>

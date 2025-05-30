@@ -6,7 +6,7 @@ const Tag = ({ tag }) => {
 
     const handleTagDelete = () => {
 
-        setBlog({ ...blog, tags: tags.filter(t => t != tag) }) 
+        setBlog(prev => ({ ...prev, tags: tags.filter(t => t != tag) })) 
 
     }
     return (
