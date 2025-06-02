@@ -208,6 +208,21 @@ server.get('/latest-blog', (req, res) => {
 
 })
 
+server.get('/trending-blog', (req, res) => {
+    const maxLimit = 5
+
+    Blog.find({ draft: false })
+    .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
+    .sort({ "activity.total_read": -1, "activity.total_likes": -1, "publishedAt": -1 })
+    .select("blog_id title des banner activity tags publishedAt -_id")
+    .limit(maxLimit)
+    .then(data => {
+        res.status(200).json({ blogs: data })
+    })
+    .catch(err => res.status(500).json({ error: err.message }))
+
+})
+
 server.post('/create-blog', verifyJWT, (req, res) => {
 
     let author = req.user
