@@ -233,18 +233,36 @@ server.get('/trending-blog', (req, res) => {
 
 server.post('/search-blog', (req, res) => {
 
-    const { tag } = req.body
+    const { page, query } = req.body
 
-    const findQuery = { tags: tag, draft: false }
+    let findQuery = {}
     const maxLimit = 5
+    let total = 0
+
+
+    if (query.charAt(0) === '@') {
+        findQuery = { tags: new RegExp(query.slice(1), 'i'), draft: false }
+    }
+    else if (query) {
+        findQuery = { draft: false, title: new RegExp(query, 'i') }
+    }
+    else {
+        return res.status(403),json({ error: 'Invalid input.' })
+    }
+
+
+    Blog.count(findQuery)
+    .then(result => { total = result })
+    .catch(err => res.status(500).json({ error: err }))
 
     Blog.find(findQuery)
         .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
         .sort({ "activity.total_read": -1, "activity.total_likes": -1, "publishedAt": -1 })
         .select("blog_id title des banner activity tags publishedAt -_id")
+        .skip((page - 1) * maxLimit)
         .limit(maxLimit)
         .then(data => {
-            res.status(200).json({ blogs: data })
+            res.status(200).json({ blogs: data, total })
         })
         .catch(err => res.status(500).json({ error: err.message }))
 
