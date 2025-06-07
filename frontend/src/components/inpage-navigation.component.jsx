@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 
-const InPageNavigation = ({ routes, defaultIActiveIndex = 0, defaultHidden = [] , children}) => {
+const InPageNavigation = ({ routes, defaultIActiveIndex = 0, setNavPage, defaultHidden = [] , children}) => {
     const [inPageNavIndex, setInPageNavIndex] = useState(defaultIActiveIndex)
     const activeTabLineRef = useRef()
     const activeTabRef = useRef()
@@ -16,6 +16,7 @@ const InPageNavigation = ({ routes, defaultIActiveIndex = 0, defaultHidden = [] 
             activeTabLineRef.current.style.left = `${offsetLeft}px`
 
             setInPageNavIndex(i)
+            setNavPage(routes[i])
     }
 
     return (

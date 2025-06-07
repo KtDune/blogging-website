@@ -7,20 +7,30 @@ import BlogPostCard from "../components/blog-post.component"
 import MinimalBlogPost from "../components/nobanner-blog-post.component"
 import { getDay, getHomeDate } from "../common/date"
 import WeatherComponent from "../components/weather.component"
+import NodataMessage from "../components/nodata.component"
+import LoadMoreDataBtn from "../components/load-more.component"
 
 const HomePage = () => {
     const [blogs, setBlogs] = useState(null)
     const [trendingBlogs, setTrendingBlogs] = useState(null)
-    const categories = []
+    const [curPage, setCurPage] = useState(1)
+    const [navPage, setNavPage] = useState('Home')
 
     useEffect(() => {
-        fetchLatestBlog()
-        fetchTrendingBlog()
-    }, [])
+        fetchLatestBlog(curPage)
 
-    const fetchLatestBlog = () => {
-        axios.get(`${import.meta.env.VITE_SERVER_DOMAIN}/latest-blog`)
-            .then(({ data }) => { setBlogs(data.blogs) })
+        if (!trendingBlogs) {
+            fetchTrendingBlog()
+        }
+    }, [curPage])
+
+    const fetchLatestBlog = (page = 1) => {
+        axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/latest-blog`, {
+            page
+        })
+            .then(({ data }) => {
+                setBlogs(data)
+            })
             .catch(err => console.error(err))
     }
 
@@ -33,18 +43,29 @@ const HomePage = () => {
         <AnimationWrapper>
             <section className="h-cover flex justify-center gap-10">
                 <div className="w-full">
-                    <InPageNavigation routes={['Home', 'Trending Blogs']} defaultHidden={['Trending Blogs']}>
+                    <InPageNavigation routes={['Home', 'Trending Blogs']} setNavPage={setNavPage} defaultHidden={['Trending Blogs']}>
 
                         <>
                             {
                                 blogs === null
                                     ? <Loader />
-                                    : blogs.map((blog, i) => (
-                                        <AnimationWrapper key={i} transition={{ duration: 1, delay: i * 0.1 }}>
-                                            <BlogPostCard content={blog} author={blog.author.personal_info} />
-                                        </AnimationWrapper>
-                                    ))
+                                    : navPage === 'Home'
+                                        ? blogs?.blogs.length === 0
+                                            ? <NodataMessage message={'No blogs published'} />
+                                            : blogs?.blogs.map((blog, i) => (
+                                                <AnimationWrapper key={i} transition={{ duration: 1, delay: i * 0.1 }}>
+                                                    <BlogPostCard content={blog} author={blog.author.personal_info} />
+                                                </AnimationWrapper>
+                                            ))
+                                        : trendingBlogs.length === 0
+                                            ? <NodataMessage message={'No trending blogs'} />
+                                            : trendingBlogs.map((blog, i) => (
+                                                <AnimationWrapper key={i} transition={{ duration: 1, delay: i * 0.1 }}>
+                                                    <BlogPostCard content={blog} author={blog.author.personal_info} />
+                                                </AnimationWrapper>
+                                            ))
                             }
+                            { navPage === 'Home' && <LoadMoreDataBtn state={blogs} setCurPage={setCurPage} curPage={curPage} /> }
                         </>
 
                     </InPageNavigation>
@@ -55,7 +76,7 @@ const HomePage = () => {
                         <h1 className="font-medium text-xl">{getHomeDate(new Date())}</h1>
 
                         <WeatherComponent />
-                        
+
                     </div>
 
                     <div>
@@ -68,11 +89,13 @@ const HomePage = () => {
                             {
                                 trendingBlogs === null
                                     ? <Loader />
-                                    : trendingBlogs.map((blog, i) => (
-                                        <AnimationWrapper key={i} transition={{ duration: 1, delay: i * 0.1 }}>
-                                            <MinimalBlogPost blog={blog} index={i} />
-                                        </AnimationWrapper>
-                                    ))
+                                    : trendingBlogs.length === 0
+                                        ? <NodataMessage message={'No trending blogs'} />
+                                        : trendingBlogs.map((blog, i) => (
+                                            <AnimationWrapper key={i} transition={{ duration: 1, delay: i * 0.1 }}>
+                                                <MinimalBlogPost blog={blog} index={i} />
+                                            </AnimationWrapper>
+                                        ))
                             }
                         </>
                     </div>

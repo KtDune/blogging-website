@@ -193,18 +193,26 @@ server.post('/google-auth', async (req, res) => {
         .catch((err) => res.status(500).json({ error: err.message }))
 })
 
-server.get('/latest-blog', (req, res) => {
+server.post('/latest-blog', (req, res) => {
+
+    const { page } = req.body
     const maxLimit = 5
+    let total = 0
+
+    Blog.count({})
+    .then(result => { total = result })
+    .catch(err => res.status(500).json({ error: err }))
 
     Blog.find({ draft: false })
-    .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
-    .sort({ "publishedAt": -1 })
-    .select("blog_id title des banner activity tags publishedAt -_id")
-    .limit(maxLimit)
-    .then(data => {
-        res.status(200).json({ blogs: data })
-    })
-    .catch(err => res.status(500).json({ error: err.message }))
+        .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
+        .sort({ "publishedAt": -1 })
+        .select("blog_id title des banner activity tags publishedAt -_id")
+        .skip((page - 1) * maxLimit)
+        .limit(maxLimit)
+        .then(data => {
+            res.status(200).json({ blogs: data, total })
+        })
+        .catch(err => res.status(500).json({ error: err.message }))
 
 })
 
@@ -212,14 +220,33 @@ server.get('/trending-blog', (req, res) => {
     const maxLimit = 5
 
     Blog.find({ draft: false })
-    .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
-    .sort({ "activity.total_read": -1, "activity.total_likes": -1, "publishedAt": -1 })
-    .select("blog_id title des banner activity tags publishedAt -_id")
-    .limit(maxLimit)
-    .then(data => {
-        res.status(200).json({ blogs: data })
-    })
-    .catch(err => res.status(500).json({ error: err.message }))
+        .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
+        .sort({ "activity.total_read": -1, "activity.total_likes": -1, "publishedAt": -1 })
+        .select("blog_id title des banner activity tags publishedAt -_id")
+        .limit(maxLimit)
+        .then(data => {
+            res.status(200).json({ blogs: data })
+        })
+        .catch(err => res.status(500).json({ error: err.message }))
+
+})
+
+server.post('/search-blog', (req, res) => {
+
+    const { tag } = req.body
+
+    const findQuery = { tags: tag, draft: false }
+    const maxLimit = 5
+
+    Blog.find(findQuery)
+        .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
+        .sort({ "activity.total_read": -1, "activity.total_likes": -1, "publishedAt": -1 })
+        .select("blog_id title des banner activity tags publishedAt -_id")
+        .limit(maxLimit)
+        .then(data => {
+            res.status(200).json({ blogs: data })
+        })
+        .catch(err => res.status(500).json({ error: err.message }))
 
 })
 

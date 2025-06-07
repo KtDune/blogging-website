@@ -31,7 +31,6 @@ const BlogEditor = () => {
                 tools: tools,
                 placeholder: 'Start your story here...',
             }))
-            console.log("rerender")
         }
     }, [])
 
