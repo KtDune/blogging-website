@@ -268,6 +268,18 @@ server.post('/search-blog', (req, res) => {
 
 })
 
+server.post('/search-user', (req, res) => {
+
+    const{ query } = req.body
+
+    User.find({ 'personal_info.username': new RegExp(query, 'i') })
+    .limit(50)
+    .select("personal_info.fullname personal_info.username personal_info.profile_img -_id")
+    .then(user => res.status(200).json(user))
+    .catch(err => res.status(500).json({ error: err.message}))
+
+})
+
 server.post('/create-blog', verifyJWT, (req, res) => {
 
     let author = req.user
