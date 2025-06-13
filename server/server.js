@@ -200,8 +200,8 @@ server.post('/latest-blog', (req, res) => {
     let total = 0
 
     Blog.count({})
-    .then(result => { total = result })
-    .catch(err => res.status(500).json({ error: err }))
+        .then(result => { total = result })
+        .catch(err => res.status(500).json({ error: err }))
 
     Blog.find({ draft: false })
         .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
@@ -233,27 +233,32 @@ server.get('/trending-blog', (req, res) => {
 
 server.post('/search-blog', (req, res) => {
 
-    const { page, query } = req.body
+    const { page, query, author } = req.body
 
     let findQuery = {}
     const maxLimit = 5
     let total = 0
 
 
-    if (query.charAt(0) === '@') {
-        findQuery = { tags: new RegExp(query.slice(1), 'i'), draft: false }
+    if (query) {
+        if (query.charAt(0) === '@') {
+            findQuery = { tags: new RegExp(query.slice(1), 'i'), draft: false }
+        }
+        else {
+            findQuery = { draft: false, title: new RegExp(query, 'i') }
+        }
     }
-    else if (query) {
-        findQuery = { draft: false, title: new RegExp(query, 'i') }
+    else if (author) {
+        findQuery = { author, draft: false }
     }
     else {
-        return res.status(403),json({ error: 'Invalid input.' })
+        return res.status(403).json({ error: 'Invalid input.' })
     }
 
 
     Blog.count(findQuery)
-    .then(result => { total = result })
-    .catch(err => res.status(500).json({ error: err }))
+        .then(result => { total = result })
+        .catch(err => res.status(500).json({ error: err }))
 
     Blog.find(findQuery)
         .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
@@ -270,13 +275,23 @@ server.post('/search-blog', (req, res) => {
 
 server.post('/search-user', (req, res) => {
 
-    const{ query } = req.body
+    const { query } = req.body
 
     User.find({ 'personal_info.username': new RegExp(query, 'i') })
-    .limit(50)
-    .select("personal_info.fullname personal_info.username personal_info.profile_img -_id")
-    .then(user => res.status(200).json(user))
-    .catch(err => res.status(500).json({ error: err.message}))
+        .limit(50)
+        .select("personal_info.fullname personal_info.username personal_info.profile_img -_id")
+        .then(user => res.status(200).json(user))
+        .catch(err => res.status(500).json({ error: err.message }))
+
+})
+
+server.post('/get-profile', (req, res) => {
+    const { username } = req.body
+
+    User.findOne({ "personal_info.username": username })
+        .select("-personal_info.password -google_auth -updateAt -blogs -__v")
+        .then(user => res.status(200).json(user))
+        .catch(err => res.status(500).json({ error: err.message }))
 
 })
 
