@@ -5,8 +5,8 @@ import List from "@editorjs/list"
 import Image from "@editorjs/image"
 import Header from "@editorjs/header"
 import Quote from "@editorjs/quote"
-import Marker from "@editorjs/marker"
 import InlineCode from "@editorjs/inline-code"
+import Delimiter from '@editorjs/delimiter';
 import { uploadImage } from "../common/firebase"
 
 const uploadByUrl = (e) => {
@@ -39,7 +39,7 @@ const uploadByFile = async (e) => {
         });
 };
 
-export const tools = {
+export const toolBar = {
     embed: Embed,
     list: {
         class: List,
@@ -66,6 +66,6 @@ export const tools = {
         class: Quote,
         inlineToolbar: true,
     },
-    marker: Marker,
+    delimiter: Delimiter,
     inlineCode: InlineCode,
 }

@@ -47,12 +47,13 @@ const ProfilePage = () => {
     const { userAuth: { username } } = useContext(UserContext)
 
     useEffect(() => {
-        resetState()
+        setProfile(profileDataStructure)
         fetchUserProfile()
     }, [profile_id])
 
     useEffect(() => {
         if (profile._id) {
+            setBlogs(null)
             getBlogs(curPage, _id)
         }
     }, [curPage, profile])
@@ -68,10 +69,6 @@ const ProfilePage = () => {
             .then(({ data }) => { setBlogs(data) })
             .catch(err => console.error(err.message))
 
-    }
-
-    const resetState = () => {
-        setProfile(profileDataStructure)
     }
 
     const fetchUserProfile = () => {

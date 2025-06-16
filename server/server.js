@@ -233,7 +233,7 @@ server.get('/trending-blog', (req, res) => {
 
 server.post('/search-blog', (req, res) => {
 
-    const { page, query, author } = req.body
+    const { page, query, author , eliminate_blog } = req.body
 
     let findQuery = {}
     const maxLimit = 5
@@ -242,7 +242,7 @@ server.post('/search-blog', (req, res) => {
 
     if (query) {
         if (query.charAt(0) === '@') {
-            findQuery = { tags: new RegExp(query.slice(1), 'i'), draft: false }
+            findQuery = { tags: new RegExp(query.slice(1), 'i'), draft: false, blog_id: { $ne: eliminate_blog } }
         }
         else {
             findQuery = { draft: false, title: new RegExp(query, 'i') }
@@ -326,6 +326,7 @@ server.post('/create-blog', verifyJWT, (req, res) => {
         des,
         banner,
         tags,
+        content,
         author,
         blog_id: blogId,
         draft: Boolean(draft),
@@ -343,6 +344,24 @@ server.post('/create-blog', verifyJWT, (req, res) => {
             .catch(err => res.status(500).json({ error: "Failed to update total posts number." }))
     })
         .catch(err => res.status(500).json({ error: err.message }))
+})
+
+server.post('/get-blog', (req, res) => {
+
+    const { blog_id } = req.body
+    const incrementVal = 1
+
+    Blog.findOneAndUpdate({ blog_id }, { $inc: { 'activity.total_reads': incrementVal } })
+    .populate('author', 'personal_info.fullname personal_info.username personal_info.profile_img')
+    .select('title des content banner activity publishedAt blog_id tags draft')
+    .then(blog => {
+        User.findOneAndUpdate({ 'personal_info.username': blog.author.personal_info.username }, { $inc: { 'account_info.total_reads': incrementVal } })
+        .catch(err => res.status(500).json({ error: err.message }))
+
+        return res.status(200).json({ blog })
+    })
+    .catch(err => res.status(500).json({ error: err.message }))
+
 })
 
 server.listen(PORT, () => {
