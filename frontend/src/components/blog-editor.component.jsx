@@ -17,7 +17,7 @@ const BlogEditor = () => {
     const authContext = useContext(UserContext)
 
     if (!context || !authContext) {
-        return
+        return null
     }
 
     const {
@@ -26,7 +26,7 @@ const BlogEditor = () => {
         setBlog,
         textEditor,
         setTextEditor,
-    } = context;
+    } = context
 
     const { userAuth: { access_token } } = authContext
     const navigate = useNavigate()
