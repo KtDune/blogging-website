@@ -1,15 +1,18 @@
 import { useContext } from "react"
 import AnimationWrapper from "../common/page-animation"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { UserContext } from "../App"
 import { removeFromSession } from "../common/session"
 
 const UserNavigationPanel = () => {
     const { userAuth: { username }, setUserAuth } = useContext(UserContext)
+    const navigate = useNavigate()
 
     const signOutUser = () => {
         removeFromSession('user')
         setUserAuth({ access_token: null })
+
+        navigate('/')
     }
 
     return (

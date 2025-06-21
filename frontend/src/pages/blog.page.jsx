@@ -23,6 +23,7 @@ const BlogPage = () => {
     const { id: blog_id } = useParams()
     const [blog, setBlog] = useState(defaultBlogStructure)
     const [similarBlog, setSimilarBlog] = useState(null)
+    const [isLikedByUser, setIsLikedByUser] = useState(false)
 
     const {
         title,
@@ -98,7 +99,7 @@ const BlogPage = () => {
                             </div>
                         </div>
 
-                        <BlogInteraction blog={blog} setBlog={setBlog} />
+                        <BlogInteraction blog={blog} setBlog={setBlog} isLikedByUser={isLikedByUser} setIsLikedByUser={setIsLikedByUser} />
 
                         <div className="my-12 font-gelasio blog-page-content">
                             {
@@ -111,7 +112,7 @@ const BlogPage = () => {
                         </div>
 
                         {/** Show two of this component so that the user won't need to navigate to the top to add like / comment. */}
-                        <BlogInteraction blog={blog} setBlog={setBlog} />
+                        <BlogInteraction blog={blog} setBlog={setBlog} isLikedByUser={isLikedByUser} setIsLikedByUser={setIsLikedByUser} />
 
                         {
                             Boolean(similarBlog?.length > 0)

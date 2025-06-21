@@ -10,6 +10,7 @@ import { getAuth } from 'firebase-admin/auth'
 
 import User from './Schema/User.js'
 import Blog from './Schema/Blog.js'
+import Notification from './Schema/Notification.js'
 
 const server = express()
 
@@ -397,6 +398,46 @@ server.post('/get-blog', (req, res) => {
     })
     .catch(err => res.status(500).json({ error: err.message }))
 
+})
+
+server.post('/like-blog', verifyJWT, (req, res) => {
+
+    const user_id = req.user
+    const { _id, isLikedByUser } = req.body
+
+    let incrementVal = !isLikedByUser ? 1 : -1
+
+    Blog.findOneAndUpdate({ _id }, { $inc: { "activity.total_likes": incrementVal } })
+    .then(blog => {
+        if (!isLikedByUser) {
+            const like = new Notification({
+                type: 'like',
+                blog: _id,
+                notification_for: blog.author,
+                user: user_id
+            })
+
+            like.save()
+            .then(notification => res.status(200).json({ liked_by_user: true }))
+            .catch(err => res.status(500).json({ error: err.message }))
+        }
+        else {
+            Notification.findOneAndDelete({ user: user_id, blog: _id, type: 'like' })
+            .then(result => res.status(200).json({ liked_by_user: false }))
+            .catch(err => res.status(500).json({ error: err.message }))
+        }
+    })
+
+})
+
+server.post('/is-liked-by-user', verifyJWT, (req, res) => {
+    const user_id = req.user
+
+    const { _id } = req.body
+
+    Notification.exists({ user: user_id, type: 'like', blog: _id })
+    .then(result => res.status(200).json({ result }))
+    .catch(err => res.status(500).json({ error: err.message }))
 })
 
 server.listen(PORT, () => {
