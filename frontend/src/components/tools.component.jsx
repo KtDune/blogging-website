@@ -84,56 +84,50 @@ function parseAttributes(str) {
     return attrs;
 }
 
-// (Keep parseHTMLString and parseAttributes as before)
-
+// Helper to split on <br> but first normalize &nbsp;
 function splitContentByBr(content) {
-  // 1. Split on every <br> or <br /> (case‑insensitive)
-  const parts = content.split(/<br\s*\/?>/i);
-  const nodes = [];
+    // 1️⃣ Replace all `&nbsp;` with a normal space
+    content = content.replace(/&nbsp;/g, ' ');
 
-  // 2. For each segment, parse it (nested HTML or plain text) and
-  //    push into nodes[], interleaving <br /> elements.
-  parts.forEach((part, idx) => {
-    const txt = part.trim();
-    if (txt) {
-      // If it looks like HTML, recurse; otherwise just text
-      const node = txt.startsWith('<')
-        ? parseHTMLString(txt)
-        : txt;
-      nodes.push(node);
+    // 2️⃣ Split on every <br> or <br /> (case‑insensitive)
+    const parts = content.split(/<br\s*\/?>/i);
+    const nodes = [];
+
+    parts.forEach((part, idx) => {
+        // also trim off any leftover whitespace
+        const txt = part.trim();
+        if (txt) {
+            // If it looks like HTML, recurse; otherwise just text
+            const node = txt.startsWith('<')
+                ? parseHTMLString(txt)
+                : txt;
+            nodes.push(node);
+        }
+        if (idx < parts.length - 1) {
+            nodes.push(React.createElement('br', { key: `br-${idx}` }));
+        }
+    });
+
+    if (nodes.length === 1) {
+        return nodes[0];
     }
-    if (idx < parts.length - 1) {
-      // Add an actual <br /> element
-      // We do give it a key here, but it's only ever wrapped below.
-      nodes.push(React.createElement('br', { key: `br-${idx}` }));
-    }
-  });
-
-  // 3. If there's only one node, return it directly:
-  if (nodes.length === 1) {
-    return nodes[0];
-  }
-
-  // 4. Otherwise wrap them in one Fragment (a single React element)
-  //    so parseHTMLString ends up with a single node, not an array.
-  return React.createElement(React.Fragment, null, ...nodes);
+    return React.createElement(React.Fragment, null, ...nodes);
 }
 
 
-
-// Recursive parser
+// Recursive parser with &nbsp; normalization
 export function parseHTMLString(str) {
-    str = str.trim();
+    // 1️⃣ Normalize all `&nbsp;` → space, then trim
+    str = str.replace(/&nbsp;/g, ' ').trim();
 
-    // Base case: plain text, but check for <br>
+    // 2️⃣ If it’s plain text (no leading `<`), maybe contains <br>
     if (!str.startsWith('<')) {
-        // New logic: split plain text with <br>
-        if (str.includes('<br')) {
-            return splitContentByBr(str);
-        }
-        return str;
+        return str.includes('<br')
+            ? splitContentByBr(str)
+            : str;
     }
 
+    // 3️⃣ Otherwise it must be a single root tag
     const tagRegex = /^<(\w+)([^>]*)>([\s\S]*)<\/\1>$/i;
     const match = str.match(tagRegex);
     if (!match) {
@@ -143,6 +137,7 @@ export function parseHTMLString(str) {
     const [, tag, attrString, innerContent] = match;
     const attributes = parseAttributes(attrString);
 
+    // 4️⃣ Recurse into the inner content (also normalized for &nbsp;)
     const children = splitContentByBr(innerContent);
 
     return React.createElement(tag, attributes, children);

@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import logo from "../imgs/logo.png"
 import AnimationWrapper from "../common/page-animation"
 import { Toaster, toast } from "react-hot-toast"
@@ -15,18 +15,13 @@ import Loader from "./loader.component"
 const BlogEditor = () => {
     const context = useContext(EditorContext)
     const authContext = useContext(UserContext)
+    const { blog_id } = useParams()
 
     if (!context || !authContext) {
-        return null
+        return (
+            <Loader />
+        )
     }
-
-    const {
-        blog: { title, banner, content, tags, des },
-        setEditorState,
-        setBlog,
-        textEditor,
-        setTextEditor,
-    } = context
 
     const { userAuth: { access_token } } = authContext
     const navigate = useNavigate()
@@ -35,12 +30,20 @@ const BlogEditor = () => {
         if (!textEditor.isReady) {
             setTextEditor(new EditorJS({
                 holder: "textEditor",
-                data: content,
+                data: Array.isArray(content) ? content[0] : content,
                 tools: toolBar,
                 placeholder: 'Start your story here...',
             }))
         }
     }, [])
+
+    const {
+        blog: { title, banner, content, tags, des },
+        setEditorState,
+        setBlog,
+        textEditor,
+        setTextEditor,
+    } = context
 
     const handlePublishEvent = (e) => {
         if (!banner) {
@@ -129,11 +132,23 @@ const BlogEditor = () => {
 
         if (textEditor.isReady) {
             textEditor.save().then(content => {
-                const payload = {
-                    title, banner, des, content, tags, draft: true,
-                }
+                let payload = {}
+                let requestLink = ''
 
-                axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/create-blog`, payload, {
+                if (blog_id) {
+                    requestLink = '/edit-blog'
+                    payload = {
+                        title, banner, des, content, tags, draft: true, id: blog_id
+                    }
+                }
+                else {
+                    requestLink = '/create-blog'
+                    payload = {
+                        title, banner, des, content, tags, draft: true
+                    }
+                }
+                
+                axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}${requestLink}`, payload, {
                     headers: {
                         'Authorization': `Bearer ${access_token}`
                     }

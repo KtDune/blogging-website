@@ -4,7 +4,7 @@ import { useContext } from "react"
 import { EditorContext } from "../pages/editor.pages"
 import Tag from "./tags.component"
 import { UserContext } from "../App"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import axios from 'axios'
 
 const PublishForm = () => {
@@ -13,6 +13,7 @@ const PublishForm = () => {
     const { blog, blog: { banner, title, content, tags, des }, setEditorState, setBlog } = useContext(EditorContext)
     const { userAuth: { access_token } } = useContext(UserContext)
     const navigate = useNavigate()
+    const { blog_id } = useParams()
 
     const handleCloseEvent = () => {
         setEditorState('editor')
@@ -72,33 +73,45 @@ const PublishForm = () => {
 
         e.target.classList.add('disable')
 
-        const payload = {
-            title, banner, des, content, tags, draft: false,
+        let payload = {}
+        let requestLink = ''
+
+        if (blog_id) {
+            requestLink = '/edit-blog'
+            payload = {
+                title, banner, des, content, tags, draft: false, id: blog_id
+            }
+        }
+        else {
+            requestLink = '/create-blog'
+            payload = {
+                title, banner, des, content, tags, draft: false
+            }
         }
 
-        axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/create-blog`, payload, {
+        axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}${requestLink}`, payload, {
             headers: {
                 'Authorization': `Bearer ${access_token}`
             }
         })
-        .then(() => {
-            e.target.classList.remove('disable')
+            .then(() => {
+                e.target.classList.remove('disable')
 
-            toast.dismiss(loadingToast)
+                toast.dismiss(loadingToast)
 
-            toast.success('Published 👍')
+                toast.success('Published 👍')
 
-            setTimeout(() => {
-                navigate('/')
-            }, 500)
-        })
-        .catch(({ response }) => {
-            e.target.classList.remove('disable')
+                setTimeout(() => {
+                    navigate('/')
+                }, 500)
+            })
+            .catch(({ response }) => {
+                e.target.classList.remove('disable')
 
-            toast.dismiss(loadingToast)
+                toast.dismiss(loadingToast)
 
-            return toast.error(response.data.error)
-        })
+                return toast.error(response.data.error)
+            })
     }
     return (
         <AnimationWrapper>

@@ -346,10 +346,40 @@ server.post('/create-blog', verifyJWT, (req, res) => {
         .catch(err => res.status(500).json({ error: err.message }))
 })
 
+server.post('/edit-blog', verifyJWT, (req, res) => {
+
+    let author = req.user
+
+    let { title, des, banner, tags, content, draft, id } = req.body
+
+    if (!title.length) {
+        return res.status(403).json({ error: 'Please provide a title.' })
+    }
+
+    if (!draft) {
+        if (!des.length || des.length > 200) {
+            return res.status(403).json({ error: 'Please provide description uder 200 characters.' })
+        }
+
+        if (!banner.length) {
+            return res.status(403).json({ error: 'Please provide a banner.' })
+        }
+
+        if (!content.blocks.length) {
+            return res.status(403).json({ error: 'Please provide some content to publish.' })
+        }
+    }
+
+    Blog.findOneAndUpdate({ blog_id: id }, { title, des, banner, content, tags, draft: draft ? draft : false })
+    .then(blog => res.status(200).json({id}))
+    .catch(error => res.status(500).json({ error: error.message }))
+
+})
+
 server.post('/get-blog', (req, res) => {
 
-    const { blog_id } = req.body
-    const incrementVal = 1
+    const { blog_id, draft, mode } = req.body
+    const incrementVal = mode !== 'edit' ? 1 : 0
 
     Blog.findOneAndUpdate({ blog_id }, { $inc: { 'activity.total_reads': incrementVal } })
     .populate('author', 'personal_info.fullname personal_info.username personal_info.profile_img')
@@ -357,6 +387,11 @@ server.post('/get-blog', (req, res) => {
     .then(blog => {
         User.findOneAndUpdate({ 'personal_info.username': blog.author.personal_info.username }, { $inc: { 'account_info.total_reads': incrementVal } })
         .catch(err => res.status(500).json({ error: err.message }))
+
+        // Cannot access blog that draft is set to false
+        if (blog.draft && !draft) {
+            res.status(500).json({ error: 'You cannot access draft blog.' })
+        }
 
         return res.status(200).json({ blog })
     })
