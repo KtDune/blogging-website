@@ -25,6 +25,7 @@ const InPageNavigation = ({ routes, defaultIActiveIndex = 0, setNavPage, default
                 {
                     routes.map((item, i) => (
                         <button
+                        type="button"
                             ref={i === defaultIActiveIndex ? activeTabRef: null}
                             key={i}
                             className={`p-4 mx-5 capitalize ${inPageNavIndex === i ? 'text-black' : 'text-dark-grey'} ${  defaultHidden.includes(item) ? 'md:hidden' : '' }`}

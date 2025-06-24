@@ -4,7 +4,7 @@ import { UserContext } from "../App"
 import { Toaster, toast } from "react-hot-toast"
 import axios from "axios"
 
-const BlogInteraction = ({ blog, setBlog, isLikedByUser, setIsLikedByUser }) => {
+const BlogInteraction = ({ blog, setBlog, isLikedByUser, setIsLikedByUser, setCommentWrapper }) => {
 
     const {
         _id,
@@ -76,6 +76,7 @@ const BlogInteraction = ({ blog, setBlog, isLikedByUser, setIsLikedByUser }) => 
             <div className="flex gap-6">
                 <div className="flex gap-2 items-center">
                     <button
+                    type="button"
                         className={`w-10 h-10 rounded-full flex items-center justify-center ${isLikedByUser ? 'bg-red/20 text-red' : 'bg-grey'}`}
                         onClick={handleLikeFunction}
                     >
@@ -85,7 +86,7 @@ const BlogInteraction = ({ blog, setBlog, isLikedByUser, setIsLikedByUser }) => 
                 </div>
 
                 <div className="flex gap-2 items-center">
-                    <button className="w-10 h-10 rounded-full flex items-center justify-center bg-grey">
+                    <button onClick={() => setCommentWrapper(prev => !prev)} className="w-10 h-10 rounded-full flex items-center justify-center bg-grey">
                         <i className="fi fi-rr-comment-dots"></i>
                     </button>
                     <p className="text-xl text-dark-grey">{total_comments}</p>

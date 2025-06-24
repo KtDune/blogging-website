@@ -121,8 +121,6 @@ server.post('/signin', async (req, res) => {
         const result = await User.findOne({ "personal_info.email": email })
 
         if (!result) {
-            console.error(err.message)
-
             return res.status(403).json({ error: "User not found" })
         }
 
@@ -146,7 +144,7 @@ server.post('/signin', async (req, res) => {
         }
     }
     catch (err) {
-        return res.status(500).json({ error: error.message })
+        return res.status(500).json({ error: err.message })
     }
 })
 

@@ -7,6 +7,7 @@ import { getHomeDate } from "../common/date"
 import BlogInteraction from "../components/blog-interaction.component"
 import BlogPostCard from "../components/blog-post.component"
 import BlogContent from "../components/blog-content.component"
+import CommentsContainer from "../components/comments.component"
 
 export const defaultBlogStructure = {
     title: '',
@@ -24,6 +25,8 @@ const BlogPage = () => {
     const [blog, setBlog] = useState(defaultBlogStructure)
     const [similarBlog, setSimilarBlog] = useState(null)
     const [isLikedByUser, setIsLikedByUser] = useState(false)
+    const [commentWrapper, setCommentWrapper] = useState(true)
+    const [totalParentCommentLoaded, setTotalParentCommentLoaded] = useState(0)
 
     const {
         title,
@@ -50,6 +53,9 @@ const BlogPage = () => {
     const resetPage = () => {
         setBlog(defaultBlogStructure)
         setSimilarBlog(null)
+        setIsLikedByUser(false)
+        setCommentWrapper(true)
+        setTotalParentCommentLoaded(0)
     }
 
     const fetchBlog = () => {
@@ -79,6 +85,15 @@ const BlogPage = () => {
             {
                 Boolean(banner && title && content)
                     ? <div className="max-w-[900px] center py-10 max-lg:px-[5vw]">
+
+                        <CommentsContainer
+                            blog={blog}
+                            commentWrapper={commentWrapper}
+                            setCommentWrapper={setCommentWrapper}
+                            totalParentCommentLoaded={totalParentCommentLoaded}
+                            setTotalParentCommentLoaded={setTotalParentCommentLoaded}
+                        />
+
                         <img src={banner} className="aspect-video" />
                         <div className="mt-12">
                             <h2>{title}</h2>
@@ -99,12 +114,18 @@ const BlogPage = () => {
                             </div>
                         </div>
 
-                        <BlogInteraction blog={blog} setBlog={setBlog} isLikedByUser={isLikedByUser} setIsLikedByUser={setIsLikedByUser} />
+                        <BlogInteraction
+                            blog={blog}
+                            setBlog={setBlog}
+                            isLikedByUser={isLikedByUser}
+                            setIsLikedByUser={setIsLikedByUser}
+                            setCommentWrapper={setCommentWrapper}
+                        />
 
                         <div className="my-12 font-gelasio blog-page-content">
                             {
                                 content[0]?.blocks.map((block, i) => (
-                                    <div  key={i} className="my-4 md:my-8">
+                                    <div key={i} className="my-4 md:my-8">
                                         <BlogContent block={block} />
                                     </div>
                                 ))
@@ -112,7 +133,13 @@ const BlogPage = () => {
                         </div>
 
                         {/** Show two of this component so that the user won't need to navigate to the top to add like / comment. */}
-                        <BlogInteraction blog={blog} setBlog={setBlog} isLikedByUser={isLikedByUser} setIsLikedByUser={setIsLikedByUser} />
+                        <BlogInteraction
+                            blog={blog}
+                            setBlog={setBlog}
+                            isLikedByUser={isLikedByUser}
+                            setIsLikedByUser={setIsLikedByUser}
+                            setCommentWrapper={setCommentWrapper}
+                        />
 
                         {
                             Boolean(similarBlog?.length > 0)
