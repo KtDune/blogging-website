@@ -3,6 +3,8 @@ import { UserContext, } from "../App"
 import { Toaster, toast } from "react-hot-toast"
 import { fetchComments } from "./comments.component"
 import axios from "axios"
+import AnimationWrapper from "../common/page-animation"
+import CommentCard from "./comment-card.component"
 
 const CommentField = ({ _id, action, blog_author, setBlog }) => {
 
@@ -34,6 +36,7 @@ const CommentField = ({ _id, action, blog_author, setBlog }) => {
         })
             .then(({ data }) => {
                 setComment('')
+                fetchComments({ skip: 0, blog_id: _id, setCommentArray })
             })
             .catch(({ error }) => console.error(error))
 
@@ -53,9 +56,9 @@ const CommentField = ({ _id, action, blog_author, setBlog }) => {
             <>
                 {
                     commentArray.map((item, i) => (
-                        <div key={i}>
-                            {item?.comment}
-                        </div>
+                        <AnimationWrapper key={i}>
+                            <CommentCard comment={item} />
+                        </AnimationWrapper>
                     ))
                 }
             </>

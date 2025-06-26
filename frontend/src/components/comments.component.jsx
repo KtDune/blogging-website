@@ -8,7 +8,7 @@ export const fetchComments = async ({ skip = 0, blog_id, setCommentArray }) => {
         skip, blog_id
     })
     .then(({ data }) => {
-        setCommentArray(prev => [...prev, ...data])
+        setCommentArray(prev => [...data])
     })
     .catch(error => console.error(error.message))
 
