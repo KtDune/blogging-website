@@ -11,6 +11,7 @@ import { getAuth } from 'firebase-admin/auth'
 import User from './Schema/User.js'
 import Blog from './Schema/Blog.js'
 import Notification from './Schema/Notification.js'
+import Comment from './Schema/Comment.js'
 
 const server = express()
 
@@ -232,7 +233,7 @@ server.get('/trending-blog', (req, res) => {
 
 server.post('/search-blog', (req, res) => {
 
-    const { page, query, author , eliminate_blog } = req.body
+    const { page, query, author, eliminate_blog } = req.body
 
     let findQuery = {}
     const maxLimit = 5
@@ -370,8 +371,8 @@ server.post('/edit-blog', verifyJWT, (req, res) => {
     }
 
     Blog.findOneAndUpdate({ blog_id: id }, { title, des, banner, content, tags, draft: draft ? draft : false })
-    .then(blog => res.status(200).json({id}))
-    .catch(error => res.status(500).json({ error: error.message }))
+        .then(blog => res.status(200).json({ id }))
+        .catch(error => res.status(500).json({ error: error.message }))
 
 })
 
@@ -381,20 +382,22 @@ server.post('/get-blog', (req, res) => {
     const incrementVal = mode !== 'edit' ? 1 : 0
 
     Blog.findOneAndUpdate({ blog_id }, { $inc: { 'activity.total_reads': incrementVal } })
-    .populate('author', 'personal_info.fullname personal_info.username personal_info.profile_img')
-    .select('title des content banner activity publishedAt blog_id tags draft')
-    .then(blog => {
-        User.findOneAndUpdate({ 'personal_info.username': blog.author.personal_info.username }, { $inc: { 'account_info.total_reads': incrementVal } })
+        .populate('author', 'personal_info.fullname personal_info.username personal_info.profile_img')
+        .select('title des content banner activity publishedAt blog_id tags draft')
+        .then(blog => {
+            User.findOneAndUpdate({ 'personal_info.username': blog.author.personal_info.username }, { $inc: { 'account_info.total_reads': incrementVal } })
+                .catch(err => {
+                    return res.status(500).json({ error: err.message })
+                })
+
+            // Cannot access blog that draft is set to false
+            if (blog.draft && !draft) {
+                return res.status(500).json({ error: 'You cannot access draft blog.' })
+            }
+
+            return res.status(200).json({ blog })
+        })
         .catch(err => res.status(500).json({ error: err.message }))
-
-        // Cannot access blog that draft is set to false
-        if (blog.draft && !draft) {
-            res.status(500).json({ error: 'You cannot access draft blog.' })
-        }
-
-        return res.status(200).json({ blog })
-    })
-    .catch(err => res.status(500).json({ error: err.message }))
 
 })
 
@@ -406,25 +409,25 @@ server.post('/like-blog', verifyJWT, (req, res) => {
     let incrementVal = !isLikedByUser ? 1 : -1
 
     Blog.findOneAndUpdate({ _id }, { $inc: { "activity.total_likes": incrementVal } })
-    .then(blog => {
-        if (!isLikedByUser) {
-            const like = new Notification({
-                type: 'like',
-                blog: _id,
-                notification_for: blog.author,
-                user: user_id
-            })
+        .then(blog => {
+            if (!isLikedByUser) {
+                const like = new Notification({
+                    type: 'like',
+                    blog: _id,
+                    notification_for: blog.author,
+                    user: user_id
+                })
 
-            like.save()
-            .then(notification => res.status(200).json({ liked_by_user: true }))
-            .catch(err => res.status(500).json({ error: err.message }))
-        }
-        else {
-            Notification.findOneAndDelete({ user: user_id, blog: _id, type: 'like' })
-            .then(result => res.status(200).json({ liked_by_user: false }))
-            .catch(err => res.status(500).json({ error: err.message }))
-        }
-    })
+                like.save()
+                    .then(notification => res.status(200).json({ liked_by_user: true }))
+                    .catch(err => res.status(500).json({ error: err.message }))
+            }
+            else {
+                Notification.findOneAndDelete({ user: user_id, blog: _id, type: 'like' })
+                    .then(result => res.status(200).json({ liked_by_user: false }))
+                    .catch(err => res.status(500).json({ error: err.message }))
+            }
+        })
 
 })
 
@@ -434,8 +437,85 @@ server.post('/is-liked-by-user', verifyJWT, (req, res) => {
     const { _id } = req.body
 
     Notification.exists({ user: user_id, type: 'like', blog: _id })
-    .then(result => res.status(200).json({ result }))
-    .catch(err => res.status(500).json({ error: err.message }))
+        .then(result => res.status(200).json({ result }))
+        .catch(err => res.status(500).json({ error: err.message }))
+})
+
+server.post("/add-comment", verifyJWT, (req, res) => {
+    let user_id = req.user;
+    const { _id, comment, blog_author } = req.body;
+
+    if (!comment.length) {
+        return res.status(403).json({ error: "Write something to leave a comment." });
+    }
+
+    const commentObj = {
+        blog_id: _id,
+        blog_author,
+        comment,
+        commented_by: user_id,
+        isReply: false,
+    };
+
+    new Comment(commentObj)
+        .save()
+        .then((commentFile) => {
+            const { comment, commentedAt, children } = commentFile;
+
+            // ✅ Perform async operations, but NO res.* calls
+            Blog.findOneAndUpdate({ _id }, {
+                $push: { comments: commentFile._id },
+                $inc: { "activity.total_comments": 1, "activity.total_parent_comments": 1 },
+            }).catch((err) => {
+                console.error("Blog Update Error:", err);
+            });
+
+            new Notification({ 
+                type: "comment", 
+                blo: _id, 
+                notification_for: blog_author, 
+                user: user_id, 
+                comment: commentFile._id 
+            }).save()
+              .catch((err) => {
+                console.error("Notification Save Error:", err);
+            });
+
+            // ✅ Final Single Response
+            return res.status(200).json({ 
+                comment, 
+                commentedAt, 
+                _id: commentFile._id, 
+                user_id, 
+                children, 
+                isReply: false 
+            });
+        })
+        .catch((error) => {
+            return res.status(500).json({ error: error.message }); // Final error handler
+        });
+});
+
+
+server.post('/get-blog-comments', (req, res) => {
+
+    const { blog_id, skip } = req.body
+    let maxLimit = 5
+
+    Comment.find({ blog_id, isReply: false })
+        .populate("commented_by", "personal_info.username personal_info.fullname personal_info.profile_img")
+        .skip(skip)
+        .limit(maxLimit)
+        .sort({
+            "commentedAt": -1
+        })
+        .then(comment => {
+            return res.status(200).json(comment)
+        })
+        .catch(error => {
+            return res.status(500).json({ error: error.message })
+        })
+
 })
 
 server.listen(PORT, () => {

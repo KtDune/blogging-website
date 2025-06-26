@@ -1,9 +1,22 @@
-import { useContext } from "react"
+import { useEffect } from "react"
 import CommentField from "./comment-field.component"
+import axios from "axios"
 
-const CommentsContainer = ({ blog, commentWrapper, setCommentWrapper, totalParentCommentLoaded, setTotalParentCommentLoaded }) => {
+export const fetchComments = async ({ skip = 0, blog_id, setCommentArray }) => {
 
-    const { title } = blog
+    await axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/get-blog-comments`, {
+        skip, blog_id
+    })
+    .then(({ data }) => {
+        setCommentArray(prev => [...prev, ...data])
+    })
+    .catch(error => console.error(error.message))
+
+}
+
+const CommentsContainer = ({ blog, setBlog, commentWrapper, setCommentWrapper, totalParentCommentLoaded, setTotalParentCommentLoaded }) => {
+
+    const { _id: blog_id, title, author: { _id: author_id } } = blog
 
     return (
     <div className={`max-sm:w-full fixed ${commentWrapper ? "top-0 sm:right-0" : "top-[100%] sm:right-[-100%]"} duration-700 max-sm:right-0 sm:top-0 w-[30%] min-w-[350px] h-full z-50 bg-white shadow-2xl p-8 px-16 overflow-y-auto overflow-x-hidden`}>
@@ -17,7 +30,7 @@ const CommentsContainer = ({ blog, commentWrapper, setCommentWrapper, totalParen
 
         <hr className="border-dark-grey my-8 w-[120%] -ml-10 " />
 
-        <CommentField action={'comment'} />
+        <CommentField action={'comment'} _id={blog_id} blog_author={author_id} setBlog={setBlog} />
 
     </div>
     )

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 
-const InPageNavigation = ({ routes, defaultIActiveIndex = 0, setNavPage, defaultHidden = [] , children}) => {
+const InPageNavigation = ({ routes, defaultIActiveIndex = 0, setNavPage, defaultHidden = [], children }) => {
     const [inPageNavIndex, setInPageNavIndex] = useState(defaultIActiveIndex)
     const activeTabLineRef = useRef()
     const activeTabRef = useRef()
@@ -10,13 +10,13 @@ const InPageNavigation = ({ routes, defaultIActiveIndex = 0, setNavPage, default
     }, [])
 
     const changePageState = (btn, i) => {
-            const { offsetWidth, offsetLeft } = btn
+        const { offsetWidth, offsetLeft } = btn
 
-            activeTabLineRef.current.style.width = `${offsetWidth}px`
-            activeTabLineRef.current.style.left = `${offsetLeft}px`
+        activeTabLineRef.current.style.width = `${offsetWidth}px`
+        activeTabLineRef.current.style.left = `${offsetLeft}px`
 
-            setInPageNavIndex(i)
-            setNavPage(routes[i])
+        setInPageNavIndex(i)
+        setNavPage(routes[i])
     }
 
     return (
@@ -25,10 +25,10 @@ const InPageNavigation = ({ routes, defaultIActiveIndex = 0, setNavPage, default
                 {
                     routes.map((item, i) => (
                         <button
-                        type="button"
-                            ref={i === defaultIActiveIndex ? activeTabRef: null}
+                            type="button"
+                            ref={i === defaultIActiveIndex ? activeTabRef : null}
                             key={i}
-                            className={`p-4 mx-5 capitalize ${inPageNavIndex === i ? 'text-black' : 'text-dark-grey'} ${  defaultHidden.includes(item) ? 'md:hidden' : '' }`}
+                            className={`p-4 mx-5 capitalize ${inPageNavIndex === i ? 'text-black' : 'text-dark-grey'} ${defaultHidden.includes(item) ? 'md:hidden' : ''}`}
                             onClick={(e) => changePageState(e.target, i)}
                         >
                             {item}
@@ -40,7 +40,7 @@ const InPageNavigation = ({ routes, defaultIActiveIndex = 0, setNavPage, default
                 <hr ref={activeTabLineRef} className="absolute bottom-0 duration-300" />
             </div>
 
-                { Array.isArray(children) ? children[inPageNavIndex] : children }
+            {Array.isArray(children) ? children[inPageNavIndex] : children}
         </>
     )
 }

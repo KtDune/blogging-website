@@ -24,10 +24,12 @@ const BlogInteraction = ({ blog, setBlog, isLikedByUser, setIsLikedByUser, setCo
                     'Authorization': `Bearer ${access_token}`
                 }
             })
-            .then(({  data: { result: { _id } } }) => {
-                setIsLikedByUser(Boolean(_id))
+            .then(({  data: { result } }) => {
+                if (result?._id) {
+                    setIsLikedByUser(Boolean(result._id))
+                }
             })
-            .catch(({error}) => toast.error(error.message))
+            .catch((error) => console.error(error))
         }
     }, [])
 
@@ -60,7 +62,7 @@ const BlogInteraction = ({ blog, setBlog, isLikedByUser, setIsLikedByUser, setCo
                         'Authorization': `Bearer ${access_token}`
                      }
                 })
-                .then(({data}) => console.log(data))
+                .then(({data}) => {  })
                 .error(err => toast.error(err))
         }
         else {

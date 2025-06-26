@@ -88,6 +88,7 @@ const BlogPage = () => {
 
                         <CommentsContainer
                             blog={blog}
+                            setBlog={setBlog}
                             commentWrapper={commentWrapper}
                             setCommentWrapper={setCommentWrapper}
                             totalParentCommentLoaded={totalParentCommentLoaded}
