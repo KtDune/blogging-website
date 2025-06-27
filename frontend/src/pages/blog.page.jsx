@@ -73,7 +73,7 @@ const BlogPage = () => {
                     eliminate_blog: blog_id,
                 })
                     .then(({ data }) => { setSimilarBlog(data.blogs) })
-                    .catch(err => console.log(err, message))
+                    .catch(err => console.error(err, message))
 
             })
             .catch(err => console.error(err))

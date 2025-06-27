@@ -6,15 +6,25 @@ import axios from "axios"
 import AnimationWrapper from "../common/page-animation"
 import CommentCard from "./comment-card.component"
 
-const CommentField = ({ _id, action, blog_author, setBlog }) => {
+const CommentField = ({ _id, action, blog_author, total_parent_comment }) => {
 
     const [comment, setComment] = useState('')
     const [commentArray, setCommentArray] = useState([])
+    const [skip, setSkip] = useState(0)
     const { userAuth: { access_token } } = useContext(UserContext)
 
     useEffect(() => {
-        fetchComments({ skip: 0, blog_id: _id, setCommentArray })
+        setSkip(0)
+        fetchComments({ skip, blog_id: _id, setCommentArray })
     }, [_id])
+
+    const loadMoreFunction = async () => {
+        setSkip(async (prev) => {
+            const updated = prev + 5
+            await fetchComments({ skip: updated, blog_id: _id, setCommentArray })
+            return updated
+        })
+    }
 
     const handleComment = (e) => {
         e.preventDefault()
@@ -61,6 +71,16 @@ const CommentField = ({ _id, action, blog_author, setBlog }) => {
                         </AnimationWrapper>
                     ))
                 }
+            </>
+
+            <>
+            {
+                total_parent_comment > commentArray.length
+                ? <button onClick={loadMoreFunction} className="text-dark-grey p-2 px-3 hover:bg-grey /30 rounded-md flex items-center gap-2">
+                    Load more....
+                </button>
+                : <></>
+            }
             </>
         </>
     )

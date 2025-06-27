@@ -472,7 +472,7 @@ server.post("/add-comment", verifyJWT, (req, res) => {
 
             new Notification({ 
                 type: "comment", 
-                blo: _id, 
+                blog: _id, 
                 notification_for: blog_author, 
                 user: user_id, 
                 comment: commentFile._id 
