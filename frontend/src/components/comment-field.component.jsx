@@ -6,7 +6,7 @@ import axios from "axios"
 import AnimationWrapper from "../common/page-animation"
 import CommentCard from "./comment-card.component"
 
-const CommentField = ({ _id, action, blog_author, total_parent_comment }) => {
+const CommentField = ({ _id, action, blog_author, total_parent_comment, replyingTo = undefined }) => {
 
     const [comment, setComment] = useState('')
     const [commentArray, setCommentArray] = useState([])
@@ -15,7 +15,9 @@ const CommentField = ({ _id, action, blog_author, total_parent_comment }) => {
 
     useEffect(() => {
         setSkip(0)
-        fetchComments({ skip, blog_id: _id, setCommentArray })
+        if (action !== 'reply') {
+            fetchComments({ skip, blog_id: _id, setCommentArray })
+        }
     }, [_id])
 
     const loadMoreFunction = async () => {
@@ -31,10 +33,14 @@ const CommentField = ({ _id, action, blog_author, total_parent_comment }) => {
 
         if (!access_token) {
             toast.error('Please login to add a comment')
+
+            return
         }
 
         if (!comment.length) {
             toast.error('Please enter a comment before publising your comment.')
+
+            return
         }
 
         axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/add-comment`, {
@@ -46,7 +52,12 @@ const CommentField = ({ _id, action, blog_author, total_parent_comment }) => {
         })
             .then(({ data }) => {
                 setComment('')
-                fetchComments({ skip: 0, blog_id: _id, setCommentArray })
+                if (replyingTo) {
+                    fetchComments({ skip: 0, blog_id: _id, replyingTo, setCommentArray: setParentCommentArray, index })
+                }
+                else {
+                    fetchComments({ skip: 0, blog_id: _id, replyingTo, setCommentArray })
+                }
             })
             .catch(({ error }) => console.error(error))
 
@@ -67,20 +78,25 @@ const CommentField = ({ _id, action, blog_author, total_parent_comment }) => {
                 {
                     commentArray.map((item, i) => (
                         <AnimationWrapper key={i}>
-                            <CommentCard comment={item} />
+                            <CommentCard
+                                comment={item}
+                                _id={_id}
+                                blog_author={blog_author}
+                                index={i}
+                            />
                         </AnimationWrapper>
                     ))
                 }
             </>
 
             <>
-            {
-                total_parent_comment > commentArray.length
-                ? <button onClick={loadMoreFunction} className="text-dark-grey p-2 px-3 hover:bg-grey /30 rounded-md flex items-center gap-2">
-                    Load more....
-                </button>
-                : <></>
-            }
+                {
+                    total_parent_comment > commentArray.length
+                        ? <button onClick={loadMoreFunction} className="text-dark-grey p-2 px-3 hover:bg-grey /30 rounded-md flex items-center gap-2">
+                            Load more comments....
+                        </button>
+                        : <></>
+                }
             </>
         </>
     )

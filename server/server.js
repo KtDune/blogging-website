@@ -443,7 +443,7 @@ server.post('/is-liked-by-user', verifyJWT, (req, res) => {
 
 server.post("/add-comment", verifyJWT, (req, res) => {
     let user_id = req.user;
-    const { _id, comment, blog_author } = req.body;
+    const { _id, comment, blog_author, replying_to } = req.body
 
     if (!comment.length) {
         return res.status(403).json({ error: "Write something to leave a comment." });
@@ -454,41 +454,56 @@ server.post("/add-comment", verifyJWT, (req, res) => {
         blog_author,
         comment,
         commented_by: user_id,
-        isReply: false,
-    };
+        isReply: Boolean(replying_to) ? true : false,
+    }
+
+    if (replying_to) {
+        commentObj.parent = replying_to
+    }
 
     new Comment(commentObj)
         .save()
-        .then((commentFile) => {
+        .then( async (commentFile) => {
             const { comment, commentedAt, children } = commentFile;
 
             // ✅ Perform async operations, but NO res.* calls
+            // total_parent_comment does not include replies while total_comment does.
             Blog.findOneAndUpdate({ _id }, {
                 $push: { comments: commentFile._id },
-                $inc: { "activity.total_comments": 1, "activity.total_parent_comments": 1 },
+                $inc: { "activity.total_comments": 1, "activity.total_parent_comments": replying_to ? 0 : 1 },
             }).catch((err) => {
                 console.error("Blog Update Error:", err);
-            });
+            })
 
-            new Notification({ 
-                type: "comment", 
-                blog: _id, 
-                notification_for: blog_author, 
-                user: user_id, 
-                comment: commentFile._id 
-            }).save()
-              .catch((err) => {
-                console.error("Notification Save Error:", err);
-            });
+            const notificationObj = {
+                type: replying_to ? "reply" : "comment",
+                blog: _id,
+                notification_for: blog_author,
+                user: user_id,
+                comment: commentFile._id
+            }
+
+            if (replying_to) {
+                notificationObj.replied_on_comment = replying_to
+
+                await Comment.findOneAndUpdate({ _id: replying_to }, { $push: { children: commentFile._id }})
+                .then(reply => { notificationObj.notification_for = reply.commented_by })
+                .catch(err => console.error(err.message))
+            }
+
+            new Notification(notificationObj).save()
+                .catch((err) => {
+                    console.error("Notification Save Error:", err);
+                })
 
             // ✅ Final Single Response
-            return res.status(200).json({ 
-                comment, 
-                commentedAt, 
-                _id: commentFile._id, 
-                user_id, 
-                children, 
-                isReply: false 
+            return res.status(200).json({
+                comment,
+                commentedAt,
+                _id: commentFile._id,
+                user_id,
+                children,
+                isReply: Boolean(replying_to) ? true : false,
             });
         })
         .catch((error) => {
@@ -499,10 +514,19 @@ server.post("/add-comment", verifyJWT, (req, res) => {
 
 server.post('/get-blog-comments', (req, res) => {
 
-    const { blog_id, skip } = req.body
+    const { blog_id, skip, replyingTo } = req.body
     let maxLimit = 5
 
-    Comment.find({ blog_id, isReply: false })
+    let commentObj = {}
+
+    if (replyingTo) {
+        commentObj = { blog_id, isReply: true, parent: replyingTo }
+    }
+    else {
+        commentObj = { blog_id, isReply: false }
+    }
+
+    Comment.find(commentObj)
         .populate("commented_by", "personal_info.username personal_info.fullname personal_info.profile_img")
         .skip(skip)
         .limit(maxLimit)
