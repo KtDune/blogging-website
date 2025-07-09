@@ -12,6 +12,7 @@ import User from './Schema/User.js'
 import Blog from './Schema/Blog.js'
 import Notification from './Schema/Notification.js'
 import Comment from './Schema/Comment.js'
+import { ServerError } from './ServerError.js';
 
 const server = express()
 
@@ -36,12 +37,12 @@ const verifyJWT = (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1]
 
     if (!token) {
-        return res.status(401).json({ error: 'No access token' })
+        throw new ServerError('No access token', { code: 401 })
     }
 
     jwt.verify(token, process.env.SECRET_ACCESS_KEY, (err, user) => {
         if (err) {
-            return res.status(403).json({ error: 'Access token is invalid' })
+            throw new ServerError('Access token is invalid', { code: 401 })
         }
 
         req.user = user.id
@@ -72,47 +73,53 @@ const formatResult = (user) => {
     }
 }
 
-server.post('/signup', (req, res) => {
-    let { fullName, email, password } = req.body
+server.post('/signup', async (req, res) => {
 
-    // validating data from frontend
-    if (fullName.length < 3) {
-        return res.status(403).json({ error: 'Full name must be at least 3 letters long' })
-    }
+    try {
+        let { fullName, email, password } = req.body
 
-    if (!email.length) {
-        return res.status(403).json({ error: 'Please enter an email' })
-    }
+        // validating data from frontend
+        if (fullName.length < 3) {
+            throw new ServerError('Full name must be at least 3 letters long', { code: 400 })
+        }
 
-    if (!emailRegex.test(email)) {
-        return res.status(403).json({ error: 'Invalid email format' })
-    }
+        if (!email.length) {
+            throw new ServerError('Please enter an email', { code: 400 })
+        }
 
-    if (!password) {
-        return res.status(403).json({ error: 'Please enter a password' })
-    }
+        if (!emailRegex.test(email)) {
+            throw new ServerError('Invalid email format', { code: 400 })
+        }
 
-    if (!passwordRegex.test(password)) {
-        return res.status(403).json({ error: 'Password should be 6 to 20 characters long with a numeric, 1 lowercase and 1 uppercase letters' })
-    }
+        if (!password) {
+            throw new ServerError('Please enter a password', { code: 400 })
+        }
 
-    bcrypt.hash(password, 10, async (err, hashed_password) => {
-        let username = await generateUsername(email)
-        let user = new User({
-            personal_info: { fullname: fullName, email, password: hashed_password, username }
+        if (!passwordRegex.test(password)) {
+            throw new ServerError('Password should be 6 to 20 characters long with a numeric, 1 lowercase and 1 uppercase letters', { code: 400 })
+        }
+
+        bcrypt.hash(password, 10, async (err, hashed_password) => {
+            let username = await generateUsername(email)
+            let user = new User({
+                personal_info: { fullname: fullName, email, password: hashed_password, username }
+            })
+
+            await user.save()
+                .then((u) => {
+                    return res.status(200).json(formatResult(u))
+                })
         })
+    }
+    catch (err) {
+        if (err.code === 11000) {
+            return res.status(err.code || 500).json({ error: "Email already exist" })
+        }
+        else {
+            return res.status(err.code || 500).json({ error: err.message })
+        }
+    }
 
-        user.save()
-            .then((u) => {
-                return res.status(200).json(formatResult(u))
-            })
-            .catch((err) => {
-                if (err.code === 11000) { // mongodb mongoose duplication error
-                    return res.status(500).json({ error: "Email already exist" })
-                }
-                return res.status(500).json({ error: err.message })
-            })
-    })
 })
 
 server.post('/signin', async (req, res) => {
@@ -122,17 +129,17 @@ server.post('/signin', async (req, res) => {
         const result = await User.findOne({ "personal_info.email": email })
 
         if (!result) {
-            return res.status(403).json({ error: "User not found" })
+            throw new ServerError("User not found", { code: 404 })
         }
 
         if (!result.google_auth) {
             bcrypt.compare(password, result.personal_info.password, (err, hashResult) => {
                 if (err) {
-                    return res.status(403).json({ error: "Error occured while login please try again" })
+                    throw new ServerError("Error occured while login please try again", { code: 404 })
                 }
 
                 if (!hashResult) {
-                    return res.status(403).json({ error: "Incorrect password" })
+                    throw new ServerError("Incorrect password", { code: 401 })
                 }
                 else {
                     return res.status(200).json(formatResult(result))
@@ -141,11 +148,11 @@ server.post('/signin', async (req, res) => {
             })
         }
         else {
-            return res.status(403).json({ error: 'Account was created using Google. Try logging in with Google.' })
+            throw new ServerError('Account was created using Google. Try logging in with Google.', { code: 400 })
         }
     }
     catch (err) {
-        return res.status(500).json({ error: err.message })
+        return res.status(err.code || 500).json({ error: err.message })
     }
 })
 
@@ -164,11 +171,11 @@ server.post('/google-auth', async (req, res) => {
                 .findOne({ "personal_info.email": email })
                 .select('personal_info.fullname personal_info.username personal_info.profile_img google_auth')
                 .then((u) => { return u || null })
-                .catch((err) => res.status(500).json({ error: err.message }))
+                .catch((err) => { throw new ServerError(err.message, { code: 500 }) })
 
             if (user) {
                 if (!user.google_auth) {
-                    res.status(403).json({ error: 'This account was signned in without Google. Please use an email and password to sign in.' })
+                    throw new ServerError('This account was signned in without Google. Please use an email and password to sign in.', { code: 400 })
                 }
             }
             else {
@@ -184,42 +191,47 @@ server.post('/google-auth', async (req, res) => {
                     user = u
                 })
                     .catch((err) => {
-                        return res.status(500).json({ error: err.message })
+                        throw new ServerError(err.message, { code: 500 })
                     })
             }
 
             return res.status(200).json(formatResult(user))
         })
-        .catch((err) => res.status(500).json({ error: err.message }))
+        .catch((err) => res.status(err.code || 500).json({ error: err.message }))
 })
 
-server.post('/latest-blog', (req, res) => {
+server.post('/latest-blog', async (req, res) => {
 
     const { page } = req.body
     const maxLimit = 5
     let total = 0
 
-    Blog.count({})
-        .then(result => { total = result })
-        .catch(err => res.status(500).json({ error: err }))
+    try {
+        await Blog.count({})
+            .then(result => { total = result })
+            .catch(err => { throw new ServerError(err.message, { code: 500 }) })
 
-    Blog.find({ draft: false })
-        .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
-        .sort({ "publishedAt": -1 })
-        .select("blog_id title des banner activity tags publishedAt -_id")
-        .skip((page - 1) * maxLimit)
-        .limit(maxLimit)
-        .then(data => {
-            res.status(200).json({ blogs: data, total })
-        })
-        .catch(err => res.status(500).json({ error: err.message }))
+        await Blog.find({ draft: false })
+            .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
+            .sort({ "publishedAt": -1 })
+            .select("blog_id title des banner activity tags publishedAt -_id")
+            .skip((page - 1) * maxLimit)
+            .limit(maxLimit)
+            .then(data => {
+                res.status(200).json({ blogs: data, total })
+            })
+            .catch(err => { throw new ServerError(err.message, { code: 500 }) })
+    }
+    catch (err) {
+        return res.status(err.code || 500).json({ error: err.message })
+    }
 
 })
 
-server.get('/trending-blog', (req, res) => {
+server.get('/trending-blog', async (req, res) => {
     const maxLimit = 5
 
-    Blog.find({ draft: false })
+    await Blog.find({ draft: false })
         .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
         .sort({ "activity.total_read": -1, "activity.total_likes": -1, "publishedAt": -1 })
         .select("blog_id title des banner activity tags publishedAt -_id")
@@ -231,7 +243,7 @@ server.get('/trending-blog', (req, res) => {
 
 })
 
-server.post('/search-blog', (req, res) => {
+server.post('/search-blog', async (req, res) => {
 
     const { page, query, author, eliminate_blog } = req.body
 
@@ -239,41 +251,51 @@ server.post('/search-blog', (req, res) => {
     const maxLimit = 5
     let total = 0
 
+    try {
 
-    if (query) {
-        if (query.charAt(0) === '@') {
-            findQuery = { tags: new RegExp(query.slice(1), 'i'), draft: false, blog_id: { $ne: eliminate_blog } }
+        if (query) {
+            if (query.charAt(0) === '@') {
+                findQuery = { tags: new RegExp(query.slice(1), 'i'), draft: false, blog_id: { $ne: eliminate_blog } }
+            }
+            else {
+                findQuery = { draft: false, title: new RegExp(query, 'i') }
+            }
+        }
+        else if (author) {
+            findQuery = { author, draft: false }
         }
         else {
-            findQuery = { draft: false, title: new RegExp(query, 'i') }
+            throw new ServerError('Invalid input.', { code: 400 })
         }
-    }
-    else if (author) {
-        findQuery = { author, draft: false }
-    }
-    else {
-        return res.status(403).json({ error: 'Invalid input.' })
-    }
 
 
-    Blog.count(findQuery)
-        .then(result => { total = result })
-        .catch(err => res.status(500).json({ error: err }))
+        await Blog.count(findQuery)
+            .then(result => { total = result })
+            .catch(err => {
+                throw new ServerError(err.message, { code: 500 })
+            })
 
-    Blog.find(findQuery)
-        .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
-        .sort({ "activity.total_read": -1, "activity.total_likes": -1, "publishedAt": -1 })
-        .select("blog_id title des banner activity tags publishedAt -_id")
-        .skip((page - 1) * maxLimit)
-        .limit(maxLimit)
-        .then(data => {
-            res.status(200).json({ blogs: data, total })
-        })
-        .catch(err => res.status(500).json({ error: err.message }))
+        await Blog.find(findQuery)
+            .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
+            .sort({ "activity.total_read": -1, "activity.total_likes": -1, "publishedAt": -1 })
+            .select("blog_id title des banner activity tags publishedAt -_id")
+            .skip((page - 1) * maxLimit)
+            .limit(maxLimit)
+            .then(data => {
+                res.status(200).json({ blogs: data, total })
+            })
+            .catch(err => {
+                throw new ServerError(err.message, { code: 500 })
+            })
+
+    }
+    catch (err) {
+        return res.status(err.code || 500).json(err.message)
+    }
 
 })
 
-server.post('/search-user', (req, res) => {
+server.post('/search-user', async (req, res) => {
 
     const { query } = req.body
 
@@ -295,250 +317,297 @@ server.post('/get-profile', (req, res) => {
 
 })
 
-server.post('/create-blog', verifyJWT, (req, res) => {
+server.post('/create-blog', verifyJWT, async (req, res) => {
 
-    let author = req.user
+    try {
+        let author = req.user
 
-    let { title, des, banner, tags, content, draft } = req.body
+        let { title, des, banner, tags, content, draft } = req.body
 
-    if (!title.length) {
-        return res.status(403).json({ error: 'Please provide a title.' })
-    }
-
-    if (!draft) {
-        if (!des.length || des.length > 200) {
-            return res.status(403).json({ error: 'Please provide description uder 200 characters.' })
+        if (!title.length) {
+            throw new ServerError('Please provide a title.', { code: 400 })
         }
 
-        if (!banner.length) {
-            return res.status(403).json({ error: 'Please provide a banner.' })
-        }
-
-        if (!content.blocks.length) {
-            return res.status(403).json({ error: 'Please provide some content to publish.' })
-        }
-    }
-
-    const blogId = title.replace(/[^a-zA-Z0-9]/g, ' ').replace(/\s+/g, '-').trim() + nanoid()
-
-    const blog = new Blog({
-        title,
-        des,
-        banner,
-        tags,
-        content,
-        author,
-        blog_id: blogId,
-        draft: Boolean(draft),
-    })
-
-    blog.save().then(blog => {
-        const incermentValue = draft ? 0 : 1
-
-        User.findOneAndUpdate({ _id: author }, {
-            $inc: { "account_info.total_posts": incermentValue }, $push: {
-                "blogs": blog._id
+        if (!draft) {
+            if (!des.length || des.length > 200) {
+                throw new ServerError('Please provide description uder 200 characters.', { code: 400 })
             }
+
+            if (!banner.length) {
+                throw new ServerError('Please provide a banner.', { code: 400 })
+            }
+
+            if (!content.blocks.length) {
+                throw new ServerError('Please provide some content to publish.', { code: 400 })
+            }
+        }
+
+        const blogId = title.replace(/[^a-zA-Z0-9]/g, ' ').replace(/\s+/g, '-').trim() + nanoid()
+
+        const blog = new Blog({
+            title,
+            des,
+            banner,
+            tags,
+            content,
+            author,
+            blog_id: blogId,
+            draft: Boolean(draft),
         })
-            .then(user => res.status(200).json({ id: blog.blog_id }))
-            .catch(err => res.status(500).json({ error: "Failed to update total posts number." }))
-    })
-        .catch(err => res.status(500).json({ error: err.message }))
+
+        await blog.save().then(async (blog) => {
+            const incermentValue = draft ? 0 : 1
+
+            await User.findOneAndUpdate({ _id: author }, {
+                $inc: { "account_info.total_posts": incermentValue }, $push: {
+                    "blogs": blog._id
+                }
+            })
+                .then(user => res.status(200).json({ id: blog.blog_id }))
+                .catch(err => {
+                    throw new ServerError("Failed to update total posts number.", { code: 500 })
+                })
+        })
+            .catch(err => {
+                throw new ServerError(err.message, { code: 500 })
+            })
+    }
+    catch (err) {
+        return res.status(err.code || 500).json({ error: err.message })
+    }
 })
 
-server.post('/edit-blog', verifyJWT, (req, res) => {
+server.post('/edit-blog', verifyJWT, async (req, res) => {
 
-    let author = req.user
+    try {
 
-    let { title, des, banner, tags, content, draft, id } = req.body
+        let { title, des, banner, tags, content, draft, id } = req.body
 
-    if (!title.length) {
-        return res.status(403).json({ error: 'Please provide a title.' })
+        if (!title.length) {
+            throw new ServerError('Please provide a title.', { code: 400 })
+        }
+
+        if (!draft) {
+            if (!des.length || des.length > 200) {
+                throw new ServerError('Please provide description uder 200 characters.', { code: 400 })
+            }
+
+            if (!banner.length) {
+                throw new ServerError('Please provide a banner.', { code: 400 })
+            }
+
+            if (!content.blocks.length) {
+                throw new ServerError('Please provide some content to publish.', { code: 400 })
+            }
+        }
+
+        await Blog.findOneAndUpdate({ blog_id: id }, { title, des, banner, content, tags, draft: draft ? draft : false })
+            .then(blog => res.status(200).json({ id }))
+            .catch(error => {
+                throw new ServerError(error.message, { code: 500 })
+            })
+
     }
-
-    if (!draft) {
-        if (!des.length || des.length > 200) {
-            return res.status(403).json({ error: 'Please provide description uder 200 characters.' })
-        }
-
-        if (!banner.length) {
-            return res.status(403).json({ error: 'Please provide a banner.' })
-        }
-
-        if (!content.blocks.length) {
-            return res.status(403).json({ error: 'Please provide some content to publish.' })
-        }
+    catch (err) {
+        return res.status(err.code || 500).json({ error: err.message })
     }
-
-    Blog.findOneAndUpdate({ blog_id: id }, { title, des, banner, content, tags, draft: draft ? draft : false })
-        .then(blog => res.status(200).json({ id }))
-        .catch(error => res.status(500).json({ error: error.message }))
-
 })
 
-server.post('/get-blog', (req, res) => {
+server.post('/get-blog', async (req, res) => {
 
     const { blog_id, draft, mode } = req.body
     const incrementVal = mode !== 'edit' ? 1 : 0
 
-    Blog.findOneAndUpdate({ blog_id }, { $inc: { 'activity.total_reads': incrementVal } })
-        .populate('author', 'personal_info.fullname personal_info.username personal_info.profile_img')
-        .select('title des content banner activity publishedAt blog_id tags draft')
-        .then(blog => {
-            User.findOneAndUpdate({ 'personal_info.username': blog.author.personal_info.username }, { $inc: { 'account_info.total_reads': incrementVal } })
-                .catch(err => {
-                    return res.status(500).json({ error: err.message })
-                })
+    try {
 
-            // Cannot access blog that draft is set to false
-            if (blog.draft && !draft) {
-                return res.status(500).json({ error: 'You cannot access draft blog.' })
-            }
+        await Blog.findOneAndUpdate({ blog_id }, { $inc: { 'activity.total_reads': incrementVal } })
+            .populate('author', 'personal_info.fullname personal_info.username personal_info.profile_img')
+            .select('title des content banner activity publishedAt blog_id tags draft')
+            .then(blog => {
+                User.findOneAndUpdate({ 'personal_info.username': blog.author.personal_info.username }, { $inc: { 'account_info.total_reads': incrementVal } })
+                    .catch(err => {
+                        throw new ServerError(err.message, { code: 500 })
+                    })
 
-            return res.status(200).json({ blog })
-        })
-        .catch(err => res.status(500).json({ error: err.message }))
+                // Cannot access blog that draft is set to false
+                if (blog.draft && !draft) {
+                    throw new ServerError('You cannot access draft blog.', { code: 403 })
+                }
 
+                return res.status(200).json({ blog })
+            })
+            .catch(err => {
+                throw new ServerError(err.message, { code: 500 })
+            })
+    }
+    catch (err) {
+        return res.status(err.code || 500).json({ error: err.message })
+    }
 })
 
-server.post('/like-blog', verifyJWT, (req, res) => {
+server.post('/like-blog', verifyJWT, async (req, res) => {
 
     const user_id = req.user
     const { _id, isLikedByUser } = req.body
 
-    let incrementVal = !isLikedByUser ? 1 : -1
+    try {
 
-    Blog.findOneAndUpdate({ _id }, { $inc: { "activity.total_likes": incrementVal } })
-        .then(blog => {
-            if (!isLikedByUser) {
-                const like = new Notification({
-                    type: 'like',
-                    blog: _id,
-                    notification_for: blog.author,
-                    user: user_id
-                })
+        let incrementVal = !isLikedByUser ? 1 : -1
 
-                like.save()
-                    .then(notification => res.status(200).json({ liked_by_user: true }))
-                    .catch(err => res.status(500).json({ error: err.message }))
-            }
-            else {
-                Notification.findOneAndDelete({ user: user_id, blog: _id, type: 'like' })
-                    .then(result => res.status(200).json({ liked_by_user: false }))
-                    .catch(err => res.status(500).json({ error: err.message }))
-            }
-        })
+        await Blog.findOneAndUpdate({ _id }, { $inc: { "activity.total_likes": incrementVal } })
+            .then(async (blog) => {
+                if (!isLikedByUser) {
+                    const like = new Notification({
+                        type: 'like',
+                        blog: _id,
+                        notification_for: blog.author,
+                        user: user_id
+                    })
+
+                    await like.save()
+                        .then(notification => res.status(200).json({ liked_by_user: true }))
+                        .catch(err => {
+                            throw new ServerError(err.message, { code: 500 })
+                        })
+                }
+                else {
+                    await Notification.findOneAndDelete({ user: user_id, blog: _id, type: 'like' })
+                        .then(result => res.status(200).json({ liked_by_user: false }))
+                        .catch(err => {
+                            throw new ServerError(err.message, { code: 500 })
+                        })
+                }
+            })
+    }
+    catch (err) {
+        return res.status(err.code || 500).json({ error: err.message })
+    }
 
 })
 
-server.post('/is-liked-by-user', verifyJWT, (req, res) => {
+server.post('/is-liked-by-user', verifyJWT, async (req, res) => {
     const user_id = req.user
 
     const { _id } = req.body
 
-    Notification.exists({ user: user_id, type: 'like', blog: _id })
+    await Notification.exists({ user: user_id, type: 'like', blog: _id })
         .then(result => res.status(200).json({ result }))
         .catch(err => res.status(500).json({ error: err.message }))
 })
 
-server.post("/add-comment", verifyJWT, (req, res) => {
+server.post("/add-comment", verifyJWT, async (req, res) => {
     let user_id = req.user;
     const { _id, comment, blog_author, replying_to } = req.body
 
-    if (!comment.length) {
-        return res.status(403).json({ error: "Write something to leave a comment." });
-    }
+    try {
 
-    const commentObj = {
-        blog_id: _id,
-        blog_author,
-        comment,
-        commented_by: user_id,
-        isReply: Boolean(replying_to) ? true : false,
-    }
+        if (!comment.length) {
+            throw new ServerError("Write something to leave a comment.", { code: 400 })
+        }
 
-    if (replying_to) {
-        commentObj.parent = replying_to
-    }
+        const commentObj = {
+            blog_id: _id,
+            blog_author,
+            comment,
+            commented_by: user_id,
+            isReply: Boolean(replying_to) ? true : false,
+        }
 
-    new Comment(commentObj)
-        .save()
-        .then( async (commentFile) => {
-            const { comment, commentedAt, children } = commentFile;
+        if (replying_to) {
+            commentObj.parent = replying_to
+        }
 
-            // ✅ Perform async operations, but NO res.* calls
-            // total_parent_comment does not include replies while total_comment does.
-            Blog.findOneAndUpdate({ _id }, {
-                $push: { comments: commentFile._id },
-                $inc: { "activity.total_comments": 1, "activity.total_parent_comments": replying_to ? 0 : 1 },
-            }).catch((err) => {
-                console.error("Blog Update Error:", err);
-            })
+        await new Comment(commentObj)
+            .save()
+            .then(async (commentFile) => {
+                const { comment, commentedAt, children } = commentFile;
 
-            const notificationObj = {
-                type: replying_to ? "reply" : "comment",
-                blog: _id,
-                notification_for: blog_author,
-                user: user_id,
-                comment: commentFile._id
-            }
-
-            if (replying_to) {
-                notificationObj.replied_on_comment = replying_to
-
-                await Comment.findOneAndUpdate({ _id: replying_to }, { $push: { children: commentFile._id }})
-                .then(reply => { notificationObj.notification_for = reply.commented_by })
-                .catch(err => console.error(err.message))
-            }
-
-            new Notification(notificationObj).save()
-                .catch((err) => {
-                    console.error("Notification Save Error:", err);
+                await Blog.findOneAndUpdate({ _id }, {
+                    $push: { comments: commentFile._id },
+                    $inc: { "activity.total_comments": 1, "activity.total_parent_comments": replying_to ? 0 : 1 },
+                }).catch((err) => {
+                    throw new ServerError(err.message, { code: 500 })
                 })
 
-            // ✅ Final Single Response
-            return res.status(200).json({
-                comment,
-                commentedAt,
-                _id: commentFile._id,
-                user_id,
-                children,
-                isReply: Boolean(replying_to) ? true : false,
+                const notificationObj = {
+                    type: replying_to ? "reply" : "comment",
+                    blog: _id,
+                    notification_for: blog_author,
+                    user: user_id,
+                    comment: commentFile._id
+                }
+
+                if (replying_to) {
+                    notificationObj.replied_on_comment = replying_to
+
+                    await Comment.findOneAndUpdate({ _id: replying_to }, { $push: { children: commentFile._id } })
+                        .then(reply => { notificationObj.notification_for = reply.commented_by })
+                        .catch(err => {
+                            throw new ServerError(err.message, { code: 500 })
+                        })
+                }
+
+                await new Notification(notificationObj).save()
+                    .catch((err) => {
+                        throw new ServerError(err.message, { code: 500 })
+                    })
+
+                return res.status(200).json({
+                    comment,
+                    commentedAt,
+                    _id: commentFile._id,
+                    user_id,
+                    children,
+                    isReply: Boolean(replying_to) ? true : false,
+                });
+            })
+            .catch((error) => {
+                throw new ServerError(error.message, { code: 500 })
             });
-        })
-        .catch((error) => {
-            return res.status(500).json({ error: error.message }); // Final error handler
-        });
-});
+
+    }
+    catch (err) {
+        return res.status(err.code || 500).json(err.message)
+    }
+
+})
 
 
-server.post('/get-blog-comments', (req, res) => {
+server.post('/get-blog-comments', async (req, res) => {
 
     const { blog_id, skip, replyingTo } = req.body
     let maxLimit = 5
 
-    let commentObj = {}
+    try {
 
-    if (replyingTo) {
-        commentObj = { blog_id, isReply: true, parent: replyingTo }
-    }
-    else {
-        commentObj = { blog_id, isReply: false }
-    }
+        let commentObj = {}
 
-    Comment.find(commentObj)
-        .populate("commented_by", "personal_info.username personal_info.fullname personal_info.profile_img")
-        .skip(skip)
-        .limit(maxLimit)
-        .sort({
-            "commentedAt": -1
-        })
-        .then(comment => {
-            return res.status(200).json(comment)
-        })
-        .catch(error => {
-            return res.status(500).json({ error: error.message })
-        })
+        if (replyingTo) {
+            commentObj = { blog_id, isReply: true, parent: replyingTo }
+        }
+        else {
+            commentObj = { blog_id, isReply: false }
+        }
+
+        await Comment.find(commentObj)
+            .populate("commented_by", "personal_info.username personal_info.fullname personal_info.profile_img")
+            .skip(skip)
+            .limit(maxLimit)
+            .sort({
+                "commentedAt": -1
+            })
+            .then(comment => {
+                return res.status(200).json(comment)
+            })
+            .catch(error => {
+                throw new ServerError(error.message, { code: 500 })
+            })
+
+
+    }
+    catch (err) {
+        return res.status(err.code || 500).json(err.message)
+    }
 
 })
 
