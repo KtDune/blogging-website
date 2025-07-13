@@ -25,6 +25,7 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
     const [skip, setSkip] = useState(0)
     const [reply, setReply] = useState('')
     const [replyArray, setReplyArray] = useState([])
+    const [childrenLength, setChildrenLength] = useState(children?.length)
 
     const {
         userAuth:
@@ -70,6 +71,7 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
                     }
                 }
                 setReplyArray(prev => [data, ...prev])
+                setChildrenLength(prev => prev + 1)
             })
             .catch((error) => console.error(error))
 
@@ -183,9 +185,9 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
 
 
                     {
-                        replyArray.length < children?.length
+                        replyArray.length < childrenLength
                             ? <div className="flex gap-5 items-center mt-5 ml-3 text-sm text-dark-grey">
-                                <button onClick={loadMoreFunction}>{`View ${children.length} more replies...`}</button>
+                                <button onClick={loadMoreFunction}>{`View ${childrenLength - replyArray.length} more replies...`}</button>
                             </div>
                             : <></>
                     }

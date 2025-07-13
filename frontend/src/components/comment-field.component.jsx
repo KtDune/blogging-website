@@ -12,6 +12,7 @@ const CommentField = ({ _id, action, blog_author, username, total_parent_comment
     const [commentArray, setCommentArray] = useState([])
     const [skip, setSkip] = useState(0)
     const { userAuth: { access_token } } = useContext(UserContext)
+    const [totalParentComment, setTotalParentComment] = useState(total_parent_comment) // params are immutable, a state is required to track the changes
 
     useEffect(() => {
         setSkip(0)
@@ -50,13 +51,15 @@ const CommentField = ({ _id, action, blog_author, username, total_parent_comment
                 'Authorization': `Bearer ${access_token}`
             }
         })
-            .then(({ data }) => {
+            .then(async ({ data }) => {
                 setComment('')
                 if (replyingTo) {
                     fetchComments({ skip: 0, blog_id: _id, replyingTo, setCommentArray: setParentCommentArray, index })
                 }
                 else {
-                    fetchComments({ skip: 0, blog_id: _id, replyingTo, setCommentArray })
+                    await fetchComments({ skip: 0, blog_id: _id, replyingTo, setCommentArray })
+
+                    setTotalParentComment(prev => prev + 1)
                 }
             })
             .catch(({ error }) => console.error(error))
@@ -93,9 +96,9 @@ const CommentField = ({ _id, action, blog_author, username, total_parent_comment
 
             <>
                 {
-                    total_parent_comment > commentArray.length
+                    totalParentComment > commentArray.length
                         ? <button onClick={loadMoreFunction} className="text-dark-grey p-2 px-3 hover:bg-grey /30 rounded-md flex items-center gap-2">
-                            {`View ${total_parent_comment  - commentArray.length} more comments...`}
+                            {`View ${totalParentComment  - commentArray.length} more comments...`}
                         </button>
                         : <></>
                 }

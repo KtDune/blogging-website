@@ -25,7 +25,7 @@ const BlogPage = () => {
     const [blog, setBlog] = useState(defaultBlogStructure)
     const [similarBlog, setSimilarBlog] = useState(null)
     const [isLikedByUser, setIsLikedByUser] = useState(false)
-    const [commentWrapper, setCommentWrapper] = useState(true)
+    const [commentWrapper, setCommentWrapper] = useState(false)
     const [totalParentCommentLoaded, setTotalParentCommentLoaded] = useState(0)
 
     const {
@@ -54,7 +54,7 @@ const BlogPage = () => {
         setBlog(defaultBlogStructure)
         setSimilarBlog(null)
         setIsLikedByUser(false)
-        setCommentWrapper(true)
+        setCommentWrapper(false)
         setTotalParentCommentLoaded(0)
     }
 
