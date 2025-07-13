@@ -552,14 +552,7 @@ server.post("/add-comment", verifyJWT, async (req, res) => {
                         throw new ServerError(err.message, { code: 500 })
                     })
 
-                return res.status(200).json({
-                    comment,
-                    commentedAt,
-                    _id: commentFile._id,
-                    user_id,
-                    children,
-                    isReply: Boolean(replying_to) ? true : false,
-                });
+                return res.status(200).json(commentFile);
             })
             .catch((error) => {
                 throw new ServerError(error.message, { code: 500 })
@@ -609,6 +602,73 @@ server.post('/get-blog-comments', async (req, res) => {
         return res.status(err.code || 500).json(err.message)
     }
 
+})
+
+const deleteComment = async (_id) => {
+
+    await Comment.findOneAndDelete({ _id })
+        .then(async (cmt) => {
+            if (cmt.isReply) {
+                await Comment.findOneAndUpdate({ _id: cmt.parent }, { $pull: { children: _id } })
+                    .then(data => { })
+                    .catch(err => {
+                        throw new ServerError(err.message, { code: 500 })
+                    })
+            }
+
+            if (cmt.children) {
+                cmt.children.map(async (item) => {
+                    await deleteComment(item)
+                })
+            }
+
+            await Notification.findOneAndDelete({ comment: _id })
+                .then(noti => { })
+                .catch(err => {
+                    throw new ServerError(err.message, { code: 500 })
+                })
+
+            await Notification.findOneAndDelete({ reply: _id })
+                .then(noti => { })
+                .catch(err => {
+                    throw new ServerError(err.message, { code: 500 })
+                })
+
+            await Blog.findOneAndUpdate({ _id: cmt.blog_id }, { $inc: { "activity.total_comments": -1, "activity.total_parent_comments": cmt.isReply ? 0 : -1 } })
+                .then(blog => { })
+                .catch(err => {
+                    throw new ServerError(err.message, { code: 500 })
+                })
+                .catch(err => {
+                    throw new ServerError(err.message, { code: 500 })
+                })
+        })
+
+}
+
+server.post('/delete-comment', verifyJWT, async (req, res) => {
+
+    try {
+
+        const user_id = req.user
+
+        const { _id } = req.body
+
+        await Comment.findOne({ _id })
+            .then(async (cmt) => {
+                if (user_id === cmt.commented_by.toString() || user_id === cmt.blog_author.toString()) {
+                    await deleteComment(_id)
+
+                    return res.status(200).json({ status: 'Done' })
+                }
+                else {
+                    throw new ServerError('You cannot delete this comment.', { code: 401 })
+                }
+            })
+    }
+    catch (err) {
+        return res.status(err.code || 500).json({ error: err.message })
+    }
 })
 
 server.listen(PORT, () => {

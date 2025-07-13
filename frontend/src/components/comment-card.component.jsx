@@ -8,7 +8,9 @@ import AnimationWrapper from "../common/page-animation"
 
 
 // Enhancement: use an index to track the deep of each comment, make sure if the comment is too deep it should not have any padding.
-const CommentCard = ({ comment, _id: blog_id, blog_author }) => {
+// Enhancement: instead of using load more replies button consider using a comment button with how many replies to load comment.
+// Enhancement: Should tag which user the comment is replying to by default.
+const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, blog_author, setParentArray }) => {
 
     const {
         _id: comment_id,
@@ -24,7 +26,14 @@ const CommentCard = ({ comment, _id: blog_id, blog_author }) => {
     const [reply, setReply] = useState('')
     const [replyArray, setReplyArray] = useState([])
 
-    const { userAuth: { access_token } } = useContext(UserContext)
+    const {
+        userAuth:
+        { access_token,
+            username: logged_in_user,
+            fullname: logged_in_user_fullname,
+            profile_img: logged_in_user_profImg
+        }
+    } = useContext(UserContext)
 
     const handleComment = (e) => {
         e.preventDefault()
@@ -50,7 +59,17 @@ const CommentCard = ({ comment, _id: blog_id, blog_author }) => {
         })
             .then(({ data }) => {
                 setReply('')
-                fetchComments({ skip, blog_id, replyingTo: blog_id, setCommentArray: setReplyArray })
+                setIsReplying(false)
+                data.commented_by = {
+                    personal_info:
+                    {
+                        username: logged_in_user,
+                        fullname: logged_in_user_fullname,
+                        profile_img: logged_in_user_profImg
+
+                    }
+                }
+                setReplyArray(prev => [data, ...prev])
             })
             .catch((error) => console.error(error))
 
@@ -71,8 +90,36 @@ const CommentCard = ({ comment, _id: blog_id, blog_author }) => {
         setSkip((prev) => {
             const updated = prev + 1
             fetchComments({ skip: (updated - 1) * 5, blog_id, replyingTo: comment_id, setCommentArray: setReplyArray })
+            
             return updated
         })
+    }
+
+    const deleteCommentsFunction = (e) => {
+        e.target.setAttribute('disabled', true)
+        let loadingToast = toast.loading('Deleting...')
+
+        axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/delete-comment`, {
+            _id: comment_id
+        }, {
+            headers: {
+                'Authorization': `Bearer ${access_token}`
+            }
+        })
+            .then(() => {
+                e.target.removeAttribute('disabled', false)
+                toast.dismiss(loadingToast)
+                toast.success('Deleted!👍')
+
+                children.map(item => item._id !== comment_id)
+                setParentArray(prev => {
+                    const updated = JSON.parse(JSON.stringify([...prev]))
+                    
+                    const deletedCmtPos = updated.findIndex((item) => item._id === comment_id)
+                    updated.splice(deletedCmtPos, 1)
+                    return updated
+                })
+            })
     }
 
     return (
@@ -88,8 +135,16 @@ const CommentCard = ({ comment, _id: blog_id, blog_author }) => {
 
                     <p className="font-gelasio text-xl ml-3">{user_comment}</p>
 
-                    <div className="flex gap-5 items-center mt-5 ml-3 text-sm text-dark-grey">
+                    <div className="flex gap-5 justify-between mt-5 ml-3 text-sm text-dark-grey">
                         <button onClick={handleReplyClick}>Reply</button>
+
+                        {
+                            access_token && (logged_in_user === username || logged_in_user === blog_author_username)
+                                ? <button onClick={deleteCommentsFunction}>
+                                    <i className="fi fi-rs-trash p-2 px-3 rounded-md border border-grey  hover:bg-red/30 hover:text-red pointer-events-none" />
+                                </button>
+                                : <></>
+                        }
                     </div>
                     <>
                         {
@@ -115,8 +170,10 @@ const CommentCard = ({ comment, _id: blog_id, blog_author }) => {
                                         <CommentCard
                                             comment={reply}
                                             _id={blog_id}
-                                            blog_author={blog_author}
+                                            blog_author={blog_author_username}
+                                            username={username}
                                             index={i}
+                                            setParentArray={setReplyArray}
                                         />
                                     </AnimationWrapper>
                                 )
@@ -128,7 +185,7 @@ const CommentCard = ({ comment, _id: blog_id, blog_author }) => {
                     {
                         replyArray.length < children?.length
                             ? <div className="flex gap-5 items-center mt-5 ml-3 text-sm text-dark-grey">
-                                <button onClick={loadMoreFunction}>Load more replies...</button>
+                                <button onClick={loadMoreFunction}>{`View ${children.length} more replies...`}</button>
                             </div>
                             : <></>
                     }

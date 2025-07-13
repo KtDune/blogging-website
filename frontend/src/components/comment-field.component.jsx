@@ -6,7 +6,7 @@ import axios from "axios"
 import AnimationWrapper from "../common/page-animation"
 import CommentCard from "./comment-card.component"
 
-const CommentField = ({ _id, action, blog_author, total_parent_comment, replyingTo = undefined }) => {
+const CommentField = ({ _id, action, blog_author, username, total_parent_comment, replyingTo = undefined }) => {
 
     const [comment, setComment] = useState('')
     const [commentArray, setCommentArray] = useState([])
@@ -82,7 +82,9 @@ const CommentField = ({ _id, action, blog_author, total_parent_comment, replying
                                 comment={item}
                                 _id={_id}
                                 blog_author={blog_author}
+                                username={username}
                                 index={i}
+                                setParentArray={setCommentArray}
                             />
                         </AnimationWrapper>
                     ))
@@ -93,7 +95,7 @@ const CommentField = ({ _id, action, blog_author, total_parent_comment, replying
                 {
                     total_parent_comment > commentArray.length
                         ? <button onClick={loadMoreFunction} className="text-dark-grey p-2 px-3 hover:bg-grey /30 rounded-md flex items-center gap-2">
-                            Load more comments....
+                            {`View ${total_parent_comment  - commentArray.length} more comments...`}
                         </button>
                         : <></>
                 }

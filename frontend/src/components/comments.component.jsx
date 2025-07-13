@@ -2,7 +2,7 @@ import { useEffect } from "react"
 import CommentField from "./comment-field.component"
 import axios from "axios"
 
-export const fetchComments = async ({ skip = 0, blog_id, setCommentArray, replyingTo = undefined, index }) => {
+export const fetchComments = async ({ skip = 0, blog_id, setCommentArray, replyingTo = undefined }) => {
 
     await axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/get-blog-comments`, {
         skip, blog_id, replyingTo
@@ -24,7 +24,7 @@ export const fetchComments = async ({ skip = 0, blog_id, setCommentArray, replyi
 
 const CommentsContainer = ({ blog, commentWrapper, setCommentWrapper }) => {
 
-    const { _id: blog_id, title, author: { _id: author_id }, activity: { total_parent_comments } } = blog
+    const { _id: blog_id, title, author: { _id: author_id, personal_info: { username } }, activity: { total_parent_comments } } = blog
 
     return (
         <div className={`max-sm:w-full fixed ${commentWrapper ? "top-0 sm:right-0" : "top-[100%] sm:right-[-100%]"} duration-700 max-sm:right-0 sm:top-0 w-[30%] min-w-[350px] h-full z-50 bg-white shadow-2xl p-8 px-16 overflow-y-auto overflow-x-hidden`}>
@@ -41,6 +41,7 @@ const CommentsContainer = ({ blog, commentWrapper, setCommentWrapper }) => {
             <CommentField action={'comment'}
                 _id={blog_id}
                 blog_author={author_id}
+                username={username}
                 total_parent_comment={total_parent_comments}
             />
 
