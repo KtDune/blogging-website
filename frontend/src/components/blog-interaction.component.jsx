@@ -17,7 +17,8 @@ const BlogInteraction = ({ blog, setBlog, isLikedByUser, setIsLikedByUser, setCo
 
     useEffect(() => {
         if (username && access_token) {
-            axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/is-liked-by-user`, {
+            axios.post
+            (`${import.meta.env.VITE_SERVER_DOMAIN}/is-liked-by-user`, {
                 _id
             }, {
                 headers: {
@@ -29,7 +30,7 @@ const BlogInteraction = ({ blog, setBlog, isLikedByUser, setIsLikedByUser, setCo
                     setIsLikedByUser(Boolean(result._id))
                 }
             })
-            .catch((error) => console.error(error))
+            .catch(({ response: { data: { error } } }) => console.error(error))
         }
     }, [])
 
@@ -63,7 +64,7 @@ const BlogInteraction = ({ blog, setBlog, isLikedByUser, setIsLikedByUser, setCo
                      }
                 })
                 .then(({data}) => {  })
-                .error(err => toast.error(err))
+                .catch(err => toast.error(err))
         }
         else {
             toast.error('Please log in to like this blog.')

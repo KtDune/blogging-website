@@ -7,9 +7,9 @@ import { fetchComments } from "./comments.component"
 import AnimationWrapper from "../common/page-animation"
 
 
-// Enhancement: use an index to track the deep of each comment, make sure if the comment is too deep it should not have any padding.
-// Enhancement: instead of using load more replies button consider using a comment button with how many replies to load comment.
-// Enhancement: Should tag which user the comment is replying to by default.
+// TODO: use an index to track the deep of each comment, make sure if the comment is too deep it should not have any padding.
+// TODO: instead of using load more replies button consider using a comment button with how many replies to load comment.
+// TODO: Should tag which user the comment is replying to by default.
 const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, blog_author, setParentArray }) => {
 
     const {

@@ -73,226 +73,204 @@ const formatResult = (user) => {
     }
 }
 
+// TODO: Implement string type checking for backend
+// TODO: Make sure to change all to either only use async/await or .then syntax
 server.post('/signup', async (req, res) => {
-
     try {
-        let { fullName, email, password } = req.body
+        let { fullName, email, password } = req.body;
 
-        // validating data from frontend
+        // Validate input
         if (fullName.length < 3) {
-            throw new ServerError('Full name must be at least 3 letters long', { code: 400 })
+            throw new ServerError('Full name must be at least 3 letters long', { code: 400 });
         }
 
         if (!email.length) {
-            throw new ServerError('Please enter an email', { code: 400 })
+            throw new ServerError('Please enter an email', { code: 400 });
         }
 
         if (!emailRegex.test(email)) {
-            throw new ServerError('Invalid email format', { code: 400 })
+            throw new ServerError('Invalid email format', { code: 400 });
         }
 
         if (!password) {
-            throw new ServerError('Please enter a password', { code: 400 })
+            throw new ServerError('Please enter a password', { code: 400 });
         }
 
         if (!passwordRegex.test(password)) {
-            throw new ServerError('Password should be 6 to 20 characters long with a numeric, 1 lowercase and 1 uppercase letters', { code: 400 })
+            throw new ServerError('Password should be 6 to 20 characters long with a numeric, 1 lowercase and 1 uppercase letters', { code: 400 });
         }
 
-        bcrypt.hash(password, 10, async (err, hashed_password) => {
-            let username = await generateUsername(email)
-            let user = new User({
-                personal_info: { fullname: fullName, email, password: hashed_password, username }
-            })
+        // Hash password
+        const hashed_password = await bcrypt.hash(password, 10);
 
-            await user.save()
-                .then((u) => {
-                    return res.status(200).json(formatResult(u))
-                })
-        })
-    }
-    catch (err) {
+        const username = await generateUsername(email);
+
+        const user = new User({
+            personal_info: {
+                fullname: fullName,
+                email,
+                password: hashed_password,
+                username,
+            },
+        });
+
+        const savedUser = await user.save();
+        return res.status(200).json(formatResult(savedUser));
+
+    } catch (err) {
         if (err.code === 11000) {
-            return res.status(err.code || 500).json({ error: "Email already exist" })
-        }
-        else {
-            return res.status(err.code || 500).json({ error: err.message })
+            return res.status(err.code || 500).json({ error: "Email already exist" });
+        } else {
+            return res.status(err.code || 500).json({ error: err.message });
         }
     }
-
 })
 
 server.post('/signin', async (req, res) => {
-    let { email, password } = req.body
+    let { email, password } = req.body;
 
     try {
-        const result = await User.findOne({ "personal_info.email": email })
+        const result = await User.findOne({ "personal_info.email": email });
 
         if (!result) {
-            throw new ServerError("User not found", { code: 404 })
+            throw new ServerError("User not found", { code: 404 });
         }
 
-        if (!result.google_auth) {
-            bcrypt.compare(password, result.personal_info.password, (err, hashResult) => {
-                if (err) {
-                    throw new ServerError("Error occured while login please try again", { code: 404 })
-                }
-
-                if (!hashResult) {
-                    throw new ServerError("Incorrect password", { code: 401 })
-                }
-                else {
-                    return res.status(200).json(formatResult(result))
-
-                }
-            })
+        if (result.google_auth) {
+            throw new ServerError('Account was created using Google. Try logging in with Google.', { code: 400 });
         }
-        else {
-            throw new ServerError('Account was created using Google. Try logging in with Google.', { code: 400 })
+
+        const passwordMatch = await bcrypt.compare(password, result.personal_info.password);
+
+        if (!passwordMatch) {
+            throw new ServerError("Incorrect password", { code: 401 });
         }
+
+        return res.status(200).json(formatResult(result));
+
+    } catch (err) {
+        return res.status(err.code || 500).json({ error: err.message });
     }
-    catch (err) {
-        return res.status(err.code || 500).json({ error: err.message })
-    }
-})
+});
+
 
 server.post('/google-auth', async (req, res) => {
-    const { access_token } = req.body
-
-    getAuth()
-        .verifyIdToken(access_token)
-        .then(async (decodeduser) => {
-
-            let { email, name, picture } = decodeduser
-
-            picture = picture.replace('s96-c', 's384-c')
-
-            let user = await User
-                .findOne({ "personal_info.email": email })
-                .select('personal_info.fullname personal_info.username personal_info.profile_img google_auth')
-                .then((u) => { return u || null })
-                .catch((err) => { throw new ServerError(err.message, { code: 500 }) })
-
-            if (user) {
-                if (!user.google_auth) {
-                    throw new ServerError('This account was signned in without Google. Please use an email and password to sign in.', { code: 400 })
-                }
-            }
-            else {
-
-                let username = await generateUsername(email)
-
-                user = new User({
-                    personal_info: { fullname: name, email, username, },
-                    google_auth: true,
-                })
-
-                await user.save().then((u) => {
-                    user = u
-                })
-                    .catch((err) => {
-                        throw new ServerError(err.message, { code: 500 })
-                    })
-            }
-
-            return res.status(200).json(formatResult(user))
-        })
-        .catch((err) => res.status(err.code || 500).json({ error: err.message }))
-})
-
-server.post('/latest-blog', async (req, res) => {
-
-    const { page } = req.body
-    const maxLimit = 5
-    let total = 0
+    const { access_token } = req.body;
 
     try {
-        await Blog.count({})
-            .then(result => { total = result })
-            .catch(err => { throw new ServerError(err.message, { code: 500 }) })
+        const decodedUser = await getAuth().verifyIdToken(access_token);
+        let { email, name, picture } = decodedUser;
 
-        await Blog.find({ draft: false })
+        picture = picture.replace('s96-c', 's384-c');
+
+        let user = await User
+            .findOne({ "personal_info.email": email })
+            .select('personal_info.fullname personal_info.username personal_info.profile_img google_auth');
+
+        if (user) {
+            if (!user.google_auth) {
+                throw new ServerError('This account was signed in without Google. Please use an email and password to sign in.', { code: 400 });
+            }
+        } else {
+            const username = await generateUsername(email);
+
+            user = new User({
+                personal_info: { fullname: name, email, username },
+                google_auth: true,
+            });
+
+            user = await user.save();
+        }
+
+        return res.status(200).json(formatResult(user));
+
+    } catch (err) {
+        return res.status(err.code || 500).json({ error: err.message });
+    }
+});
+
+
+server.post('/latest-blog', async (req, res) => {
+    const { page } = req.body;
+    const maxLimit = 5;
+
+    try {
+        const total = await Blog.count({});
+
+        const blogs = await Blog.find({ draft: false })
             .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
-            .sort({ "publishedAt": -1 })
+            .sort({ publishedAt: -1 })
             .select("blog_id title des banner activity tags publishedAt -_id")
             .skip((page - 1) * maxLimit)
-            .limit(maxLimit)
-            .then(data => {
-                res.status(200).json({ blogs: data, total })
-            })
-            .catch(err => { throw new ServerError(err.message, { code: 500 }) })
-    }
-    catch (err) {
-        return res.status(err.code || 500).json({ error: err.message })
-    }
+            .limit(maxLimit);
 
-})
+        return res.status(200).json({ blogs, total });
+
+    } catch (err) {
+        return res.status(err.code || 500).json({ error: err.message });
+    }
+});
+
 
 server.get('/trending-blog', async (req, res) => {
-    const maxLimit = 5
+    const maxLimit = 5;
 
-    await Blog.find({ draft: false })
-        .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
-        .sort({ "activity.total_read": -1, "activity.total_likes": -1, "publishedAt": -1 })
-        .select("blog_id title des banner activity tags publishedAt -_id")
-        .limit(maxLimit)
-        .then(data => {
-            res.status(200).json({ blogs: data })
-        })
-        .catch(err => res.status(500).json({ error: err.message }))
+    try {
+        const blogs = await Blog.find({ draft: false })
+            .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
+            .sort({ "activity.total_read": -1, "activity.total_likes": -1, "publishedAt": -1 })
+            .select("blog_id title des banner activity tags publishedAt -_id")
+            .limit(maxLimit);
 
+        return res.status(200).json({ blogs });
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
 })
 
 server.post('/search-blog', async (req, res) => {
+    const { page, query, author, eliminate_blog } = req.body;
 
-    const { page, query, author, eliminate_blog } = req.body
-
-    let findQuery = {}
-    const maxLimit = 5
-    let total = 0
+    let findQuery = {};
+    const maxLimit = 5;
 
     try {
-
+        // Construct the query
         if (query) {
             if (query.charAt(0) === '@') {
-                findQuery = { tags: new RegExp(query.slice(1), 'i'), draft: false, blog_id: { $ne: eliminate_blog } }
+                findQuery = {
+                    tags: new RegExp(query.slice(1), 'i'),
+                    draft: false,
+                    blog_id: { $ne: eliminate_blog }
+                };
+            } else {
+                findQuery = {
+                    draft: false,
+                    title: new RegExp(query, 'i')
+                };
             }
-            else {
-                findQuery = { draft: false, title: new RegExp(query, 'i') }
-            }
-        }
-        else if (author) {
-            findQuery = { author, draft: false }
-        }
-        else {
-            throw new ServerError('Invalid input.', { code: 400 })
+        } else if (author) {
+            findQuery = { author, draft: false };
+        } else {
+            throw new ServerError('Invalid input.', { code: 400 });
         }
 
+        // Count matching blogs
+        const total = await Blog.count(findQuery);
 
-        await Blog.count(findQuery)
-            .then(result => { total = result })
-            .catch(err => {
-                throw new ServerError(err.message, { code: 500 })
-            })
-
-        await Blog.find(findQuery)
+        // Fetch matching blogs
+        const blogs = await Blog.find(findQuery)
             .populate("author", "personal_info.profile_img personal_info.username personal_info.fullname -_id")
             .sort({ "activity.total_read": -1, "activity.total_likes": -1, "publishedAt": -1 })
             .select("blog_id title des banner activity tags publishedAt -_id")
             .skip((page - 1) * maxLimit)
-            .limit(maxLimit)
-            .then(data => {
-                res.status(200).json({ blogs: data, total })
-            })
-            .catch(err => {
-                throw new ServerError(err.message, { code: 500 })
-            })
+            .limit(maxLimit);
 
-    }
-    catch (err) {
-        return res.status(err.code || 500).json(err.message)
-    }
+        return res.status(200).json({ blogs, total });
 
+    } catch (err) {
+        return res.status(err.code || 500).json({ error: err.message });
+    }
 })
 
 server.post('/search-user', async (req, res) => {
@@ -670,6 +648,54 @@ server.post('/delete-comment', verifyJWT, async (req, res) => {
         return res.status(err.code || 500).json({ error: err.message })
     }
 })
+
+// TODO: Implement forgot password on user login page, an email needs to be sent to the user to verify if the account holder is sending the change password request.
+// TODO: currentPassword and newPassword should not be the same
+server.post('/change-password', verifyJWT, async (req, res) => {
+    const user_id = req.user;
+    const { currentPassword, newPassword } = req.body;
+
+    try {
+        // Validate passwords
+        if (!passwordRegex.test(currentPassword) || !passwordRegex.test(newPassword)) {
+            throw new ServerError(
+                'Password should be 6 to 20 characters long with a numeric, 1 lowercase and 1 uppercase letter',
+                { code: 403 }
+            );
+        }
+
+        // Fetch user
+        const user = await User.findOne({ _id: user_id });
+        if (!user) {
+            throw new ServerError('User not found', { code: 404 });
+        }
+
+        if (user.google_auth) {
+            throw new ServerError('You cannot reset password as you are logged in with Google.', { code: 403 });
+        }
+
+        // Compare passwords
+        const isMatch = await bcrypt.compare(currentPassword, user.personal_info.password);
+        if (!isMatch) {
+            throw new ServerError('Incorrect current password', { code: 403 });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update password
+        await User.findOneAndUpdate(
+            { _id: user_id },
+            { "personal_info.password": hashedPassword }
+        );
+
+        return res.status(200).json({ status: "Password changed." });
+
+    } catch (err) {
+        return res.status(err.code || 500).json({ error: err.message });
+    }
+});
+
 
 server.listen(PORT, () => {
     console.log(`Listening on port ${PORT}`)

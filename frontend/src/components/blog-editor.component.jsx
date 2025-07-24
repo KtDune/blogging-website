@@ -12,6 +12,7 @@ import axios from "axios"
 import { UserContext } from "../App"
 import Loader from "./loader.component"
 
+// TODO: Implement DOMPurify to sanitize the inputs
 const BlogEditor = () => {
     const context = useContext(EditorContext)
     const authContext = useContext(UserContext)

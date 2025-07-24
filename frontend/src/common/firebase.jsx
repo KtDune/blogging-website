@@ -3,7 +3,6 @@ import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
 import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage"
-// TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
 // Your web app's Firebase configuration
@@ -42,6 +41,8 @@ export const authWithGoogle = async () => {
     }
 }
 
+// TODO: Implement auth checking beofre user upload images.
+// TODO: Compress image before uploading
 export const uploadImage = async (image) => {
 
     try {
