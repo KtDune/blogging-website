@@ -285,6 +285,67 @@ server.post('/search-user', async (req, res) => {
 
 })
 
+server.post('/update-profile-img', verifyJWT,async (req, res) => {
+
+    const { url } = req.body
+
+    await User.findOneAndUpdate({ _id: req.user }, { "personal_info.profile_img": url })
+    .then(() => res.status(200).json({ "profile_img": url }))
+    .catch((error) => res.status(500).json({ error: 'Unable to upload image.' }))
+
+})
+
+server.post('/update-profile', verifyJWT,async (req, res) => {
+
+    const { username, bio, social_links } = req.body
+    const bioLimit = 200
+
+    if (username.length < 3) {
+        return res.status(403).json({ error: 'Username shhould be at least 3 letters long.' })
+    }
+
+    if (bio.length >= bioLimit) {
+        return res.status(403).json({ error: 'Bio should not be more than ' + bioLimit + ' characters.' })
+    }
+
+    const socialLinkArr = Object.keys(social_links)
+
+    try {
+
+        for (let i = 0; i < socialLinkArr.length; i++) {
+            if (social_links[socialLinkArr[i]]) {
+                const hostname = new URL(social_links[socialLinkArr[i]]).hostname
+
+                if (!hostname.includes(`${socialLinkArr[i]}.com`) && socialLinkArr[i] !== 'website') {
+                    throw new ServerError(`${socialLinkArr[i]} link is invalid. You must enter a full link.`, { code: 403 })
+                }
+            }
+        }
+
+        const updateObj = {
+            'personal_info.username': username,
+            'personal_info.bio': bio,
+            social_links,
+        }
+
+        const result = await User.findOneAndUpdate({ _id: req.user }, updateObj, {
+            runValidators: true,
+        })
+
+        if (result) {
+            return res.status(200).json({  username })
+        }
+        else {
+            throw new ServerError('Unbale to update the profile.', { code: 500 })
+        }
+
+    }
+    catch (err) {
+        return res.status(err.code || 500).json({ error: err.message })
+    }
+
+})
+
 server.post('/get-profile', (req, res) => {
     const { username } = req.body
 

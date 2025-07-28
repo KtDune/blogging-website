@@ -98,7 +98,7 @@ const BlogEditor = () => {
         let image = e.target.files[0]
 
         if (image) {
-            let loadingToast = toast.loading('Uploading Image...')
+            let loadingToast = toast.loading('Uploading...')
             const url = await uploadImage(image)
 
             if (url) {
@@ -109,7 +109,6 @@ const BlogEditor = () => {
             }
             else {
                 toast.dismiss(loadingToast)
-                toast.success('Uploaded Failed')
                 toast.error('Image upload failed.')
             }
         }
