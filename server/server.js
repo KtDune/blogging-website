@@ -13,6 +13,7 @@ import Blog from './Schema/Blog.js'
 import Notification from './Schema/Notification.js'
 import Comment from './Schema/Comment.js'
 import { ServerError } from './ServerError.js';
+import is_number from 'is-number';
 
 const server = express()
 
@@ -51,6 +52,16 @@ const verifyJWT = (req, res, next) => {
 
 }
 
+function isPlainObject(value) {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value) &&
+      Object.prototype.toString.call(value) === '[object Object]'
+    )
+  }
+  
+
 const generateUsername = async (email) => {
     let username = email.split('@')[0]
 
@@ -80,11 +91,11 @@ server.post('/signup', async (req, res) => {
         let { fullName, email, password } = req.body;
 
         // Validate input
-        if (fullName.length < 3) {
+        if (typeof fullName !== 'string' || fullName.length < 3) {
             throw new ServerError('Full name must be at least 3 letters long', { code: 400 });
         }
 
-        if (!email.length) {
+        if (typeof email !== 'string' || !email.length) {
             throw new ServerError('Please enter an email', { code: 400 });
         }
 
@@ -92,7 +103,7 @@ server.post('/signup', async (req, res) => {
             throw new ServerError('Invalid email format', { code: 400 });
         }
 
-        if (!password) {
+        if (!password || typeof password !== 'string') {
             throw new ServerError('Please enter a password', { code: 400 });
         }
 
@@ -127,7 +138,7 @@ server.post('/signup', async (req, res) => {
 })
 
 server.post('/signin', async (req, res) => {
-    let { email, password } = req.body;
+    let { email, password } = req.body
 
     try {
         const result = await User.findOne({ "personal_info.email": email });
@@ -187,12 +198,19 @@ server.post('/google-auth', async (req, res) => {
     } catch (err) {
         return res.status(err.code || 500).json({ error: err.message });
     }
-});
+})
 
 
 server.post('/latest-blog', async (req, res) => {
     const { page } = req.body;
     const maxLimit = 5;
+
+    if (!is_number(page) || !Number.isFinite(page)) {
+        throw new ServerError('Please give a valid number', { code: 403 })
+    }
+
+    // Prevent negative num
+    page = Math.max(0, (page - 1) * maxLimit)
 
     try {
         const total = await Blog.count({});
@@ -236,7 +254,7 @@ server.post('/search-blog', async (req, res) => {
 
     try {
         // Construct the query
-        if (query) {
+        if (query && typeof query === 'string') {
             if (query.charAt(0) === '@') {
                 findQuery = {
                     tags: new RegExp(query.slice(1), 'i'),
@@ -277,6 +295,10 @@ server.post('/search-user', async (req, res) => {
 
     const { query } = req.body
 
+    if (!query || typeof query !== 'string') {
+        return res.status(403).json({ error: 'Please provide a valid string.' })
+    }
+
     User.find({ 'personal_info.username': new RegExp(query, 'i') })
         .limit(50)
         .select("personal_info.fullname personal_info.username personal_info.profile_img -_id")
@@ -289,6 +311,10 @@ server.post('/update-profile-img', verifyJWT,async (req, res) => {
 
     const { url } = req.body
 
+    if (!url || typeof url !== 'string') {
+        return res.status(403).json({ error: 'Please provide a valid url.' })
+    }
+
     await User.findOneAndUpdate({ _id: req.user }, { "personal_info.profile_img": url })
     .then(() => res.status(200).json({ "profile_img": url }))
     .catch((error) => res.status(500).json({ error: 'Unable to upload image.' }))
@@ -300,12 +326,16 @@ server.post('/update-profile', verifyJWT,async (req, res) => {
     const { username, bio, social_links } = req.body
     const bioLimit = 200
 
-    if (username.length < 3) {
+    if (typeof username !== 'string' || username.length < 3) {
         return res.status(403).json({ error: 'Username shhould be at least 3 letters long.' })
     }
 
-    if (bio.length >= bioLimit) {
+    if (typeof bio != 'string' || bio.length >= bioLimit) {
         return res.status(403).json({ error: 'Bio should not be more than ' + bioLimit + ' characters.' })
+    }
+
+    if (!isPlainObject(social_links)) {
+        return res.status(403).json({ error: 'Please provide a valid object.' })
     }
 
     const socialLinkArr = Object.keys(social_links)
@@ -349,6 +379,10 @@ server.post('/update-profile', verifyJWT,async (req, res) => {
 server.post('/get-profile', (req, res) => {
     const { username } = req.body
 
+    if (!username || typeof username !== 'string') {
+        return res.status(403).json({ error: 'Please proide a valid username.' })
+    }
+
     User.findOne({ "personal_info.username": username })
         .select("-personal_info.password -google_auth -updateAt -blogs -__v")
         .then(user => res.status(200).json(user))
@@ -363,20 +397,24 @@ server.post('/create-blog', verifyJWT, async (req, res) => {
 
         let { title, des, banner, tags, content, draft } = req.body
 
-        if (!title.length) {
+        if (typeof title !== 'string' || !title.length) {
             throw new ServerError('Please provide a title.', { code: 400 })
         }
 
+        if (typeof draft !== 'boolean') {
+            return res.status(403).json({ error: 'Please provide a valid value.' })
+        }
+
         if (!draft) {
-            if (!des.length || des.length > 200) {
-                throw new ServerError('Please provide description uder 200 characters.', { code: 400 })
+            if (typeof des !== 'string' || !des.length || des.length > 200) {
+                throw new ServerError('Please provide description under 200 characters.', { code: 400 })
             }
 
-            if (!banner.length) {
+            if (typeof banner !== 'string' || !banner.length) {
                 throw new ServerError('Please provide a banner.', { code: 400 })
             }
 
-            if (!content.blocks.length) {
+            if (Array.isArray(content.blocks) || !content.blocks.length) {
                 throw new ServerError('Please provide some content to publish.', { code: 400 })
             }
         }
@@ -422,12 +460,16 @@ server.post('/edit-blog', verifyJWT, async (req, res) => {
 
         let { title, des, banner, tags, content, draft, id } = req.body
 
-        if (!title.length) {
+        if (typeof title !== 'string' || !title.length) {
             throw new ServerError('Please provide a title.', { code: 400 })
+        }
+        
+        if (typeof draft !== 'boolean') {
+            throw new ServerError('Please provide a valid value.', { code: 400 })
         }
 
         if (!draft) {
-            if (!des.length || des.length > 200) {
+            if (typeof des !== 'string' || !des.length || des.length > 200) {
                 throw new ServerError('Please provide description uder 200 characters.', { code: 400 })
             }
 
@@ -435,7 +477,7 @@ server.post('/edit-blog', verifyJWT, async (req, res) => {
                 throw new ServerError('Please provide a banner.', { code: 400 })
             }
 
-            if (!content.blocks.length) {
+            if (Array.isArray(content.blocks) || !content.blocks.length) {
                 throw new ServerError('Please provide some content to publish.', { code: 400 })
             }
         }
@@ -540,8 +582,15 @@ server.post("/add-comment", verifyJWT, async (req, res) => {
 
     try {
 
-        if (!comment.length) {
+        if (typeof comment !== 'string' || !comment.length) {
             throw new ServerError("Write something to leave a comment.", { code: 400 })
+        }
+
+        if (
+            typeof _id !== 'string'
+            || typeof blog_author !== 'string'
+        ) {
+            throw new ServerError('Please provide a valid value', { code: 403 })
         }
 
         const commentObj = {
@@ -550,6 +599,10 @@ server.post("/add-comment", verifyJWT, async (req, res) => {
             comment,
             commented_by: user_id,
             isReply: Boolean(replying_to) ? true : false,
+        }
+
+        if (typeof replying_to !== 'string') {
+            throw new ServerError('Please provide a valid value', { code: 403 })
         }
 
         if (replying_to) {
@@ -609,6 +662,10 @@ server.post('/get-blog-comments', async (req, res) => {
 
     const { blog_id, skip, replyingTo } = req.body
     let maxLimit = 5
+
+    if (!is_number(skip) || typeof replyingTo !== 'string') {
+        return res.status(400).json({ error: 'Please provide a valid value.' })
+    }
 
     try {
 
@@ -693,6 +750,10 @@ server.post('/delete-comment', verifyJWT, async (req, res) => {
 
         const { _id } = req.body
 
+        if (typeof _id !== 'string') {
+            throw new ServerError('Please provide a valid value.', { code: 400 })
+        }
+
         await Comment.findOne({ _id })
             .then(async (cmt) => {
                 if (user_id === cmt.commented_by.toString() || user_id === cmt.blog_author.toString()) {
@@ -714,7 +775,11 @@ server.post('/delete-comment', verifyJWT, async (req, res) => {
 // TODO: currentPassword and newPassword should not be the same
 server.post('/change-password', verifyJWT, async (req, res) => {
     const user_id = req.user;
-    const { currentPassword, newPassword } = req.body;
+    const { currentPassword, newPassword } = req.body
+
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+    throw new ServerError('Please provide a valid value.', { code: 400 })
+    }
 
     try {
         // Validate passwords
