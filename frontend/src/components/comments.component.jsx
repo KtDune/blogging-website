@@ -1,26 +1,5 @@
 import { useEffect } from "react"
 import CommentField from "./comment-field.component"
-import axios from "axios"
-
-export const fetchComments = async ({ skip = 0, blog_id, setCommentArray, replyingTo = undefined }) => {
-
-    await axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/get-blog-comments`, {
-        skip, blog_id, replyingTo
-    })
-        .then(({ data }) => {
-            setCommentArray(prev => {
-                const merged = [...data, ...prev];
-                const uniqueById = Array.from(new Map(merged.map(obj => [obj._id, obj])).values())
-
-                const finalResult = uniqueById.sort((a, b) => new Date(b.commentedAt) - new Date(a.commentedAt))
-
-                return finalResult
-            })
-
-        })
-        .catch(error => console.error(error.message))
-
-}
 
 const CommentsContainer = ({ blog, commentWrapper, setCommentWrapper }) => {
 

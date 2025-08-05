@@ -9,6 +9,7 @@ import InlineCode from "@editorjs/inline-code"
 import Delimiter from '@editorjs/delimiter';
 import { uploadImage } from "../common/firebase"
 import React from 'react';
+import axios from "axios"
 
 const uploadByUrl = (e) => {
     let link = new Promise((resolve, reject) => {
@@ -141,4 +142,19 @@ export function parseHTMLString(str) {
     const children = splitContentByBr(innerContent);
 
     return React.createElement(tag, attributes, children);
+}
+
+export const fetchComments = async ({ skip = 0, blog_id, replyingTo = undefined }) => {
+    try {
+        const { data } = await axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/get-blog-comments`, {
+            skip,
+            blog_id,
+            replyingTo
+        })
+
+        return data
+    } catch (error) {
+        console.error(error.message)
+        return [] // or null or throw error again depending on your design
+    }
 }

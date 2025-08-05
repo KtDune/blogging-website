@@ -1,16 +1,16 @@
-import { useContext, useState } from "react"
+import { useContext, useEffect, useState } from "react"
 import { getDay } from "../common/date"
 import { UserContext } from "../App"
 import toast, { Toaster } from "react-hot-toast"
 import axios from "axios"
-import { fetchComments } from "./comments.component"
+import { fetchComments } from "./tools.component"
 import AnimationWrapper from "../common/page-animation"
 
 
 // TODO: use an index to track the deep of each comment, make sure if the comment is too deep it should not have any padding.
 // TODO: instead of using load more replies button consider using a comment button with how many replies to load comment.
 // TODO: Should tag which user the comment is replying to by default.
-const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, blog_author, setParentArray }) => {
+const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, blog_author, setParentArray, setTotalParentComment }) => {
 
     const {
         _id: comment_id,
@@ -25,7 +25,11 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
     const [skip, setSkip] = useState(0)
     const [reply, setReply] = useState('')
     const [replyArray, setReplyArray] = useState([])
-    const [childrenLength, setChildrenLength] = useState(children?.length)
+    const [childrenLength, setChildrenLength] = useState(0)
+
+    useEffect(() => {
+        setChildrenLength(children.length)
+    }, [])
 
     const {
         userAuth:
@@ -89,13 +93,13 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
     }
 
     const loadMoreFunction = async () => {
-        setSkip((prev) => {
-            const updated = prev + 1
-            fetchComments({ skip: (updated - 1) * 5, blog_id, replyingTo: comment_id, setCommentArray: setReplyArray })
-            
-            return updated
-        })
-    }
+        const result = await fetchComments({ skip, blog_id, replyingTo: comment_id })
+      
+        setReplyArray(prevCmt => [...prevCmt, ...result])
+        const newSkip = skip + 5
+        setSkip(newSkip)
+      }
+      
 
     const deleteCommentsFunction = (e) => {
         e.target.setAttribute('disabled', true)
@@ -168,14 +172,15 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
                         replyArray.length > 0
                             ? replyArray.map((reply, i) => {
                                 return (
-                                    <AnimationWrapper key={i}>
+                                    <AnimationWrapper key={reply._id}>
                                         <CommentCard
                                             comment={reply}
                                             _id={blog_id}
-                                            blog_author={blog_author_username}
+                                            blog_author={blog_author}
                                             username={username}
                                             index={i}
                                             setParentArray={setReplyArray}
+                                            setTotalParentComment={setChildrenLength}
                                         />
                                     </AnimationWrapper>
                                 )
@@ -185,7 +190,7 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
 
 
                     {
-                        replyArray.length < childrenLength
+                        childrenLength > replyArray.length
                             ? <div className="flex gap-5 items-center mt-5 ml-3 text-sm text-dark-grey">
                                 <button onClick={loadMoreFunction}>{`View ${childrenLength - replyArray.length} more replies...`}</button>
                             </div>

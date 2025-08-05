@@ -1,32 +1,37 @@
 import { useContext, useState, useEffect } from "react"
 import { UserContext, } from "../App"
 import { Toaster, toast } from "react-hot-toast"
-import { fetchComments } from "./comments.component"
+import { fetchComments } from "./tools.component"
 import axios from "axios"
 import AnimationWrapper from "../common/page-animation"
 import CommentCard from "./comment-card.component"
 
-const CommentField = ({ _id, action, blog_author, username, total_parent_comment, replyingTo = undefined }) => {
+const CommentField = ({ _id, action, blog_author, username, total_parent_comment }) => {
 
     const [comment, setComment] = useState('')
     const [commentArray, setCommentArray] = useState([])
     const [skip, setSkip] = useState(0)
-    const { userAuth: { access_token } } = useContext(UserContext)
+    const { userAuth: { access_token, username: logged_in_user, fullname: logged_in_user_fullname, profile_img: logged_in_user_profImg } } = useContext(UserContext)
     const [totalParentComment, setTotalParentComment] = useState(total_parent_comment) // params are immutable, a state is required to track the changes
 
     useEffect(() => {
         setSkip(0)
+        const initialize = async () => {
+            const result = await fetchComments({ skip, blog_id: _id })
+            setCommentArray([...result])
+        }
+
         if (action !== 'reply') {
-            fetchComments({ skip, blog_id: _id, setCommentArray })
+            initialize()
         }
     }, [_id])
 
     const loadMoreFunction = async () => {
-        setSkip(async (prev) => {
-            const updated = prev + 5
-            await fetchComments({ skip: updated, blog_id: _id, setCommentArray })
-            return updated
-        })
+        const newSkip = skip + 5
+        const result = await fetchComments({ skip: newSkip, blog_id: _id })
+
+        setCommentArray(prevCmt => [...prevCmt, ...result])
+        setSkip(newSkip)
     }
 
     const handleComment = (e) => {
@@ -53,14 +58,22 @@ const CommentField = ({ _id, action, blog_author, username, total_parent_comment
         })
             .then(async ({ data }) => {
                 setComment('')
-                if (replyingTo) {
-                    fetchComments({ skip: 0, blog_id: _id, replyingTo, setCommentArray: setParentCommentArray, index })
-                }
-                else {
-                    await fetchComments({ skip: 0, blog_id: _id, replyingTo, setCommentArray })
+                data.commented_by = {
+                    personal_info:
+                    {
+                        username: logged_in_user,
+                        fullname: logged_in_user_fullname,
+                        profile_img: logged_in_user_profImg,
+                        children: data.chidren
 
-                    setTotalParentComment(prev => prev + 1)
+                    }
                 }
+                setCommentArray(prev => {
+                    const updated = JSON.parse(JSON.stringify([data, ...prev]))
+
+                    return updated
+                })
+                setTotalParentComment(prev => prev + 1)
             })
             .catch(({ error }) => console.error(error))
 
@@ -79,8 +92,9 @@ const CommentField = ({ _id, action, blog_author, username, total_parent_comment
 
             <>
                 {
+                    commentArray &&
                     commentArray.map((item, i) => (
-                        <AnimationWrapper key={i}>
+                        <AnimationWrapper key={item._id}>
                             <CommentCard
                                 comment={item}
                                 _id={_id}
@@ -88,6 +102,7 @@ const CommentField = ({ _id, action, blog_author, username, total_parent_comment
                                 username={username}
                                 index={i}
                                 setParentArray={setCommentArray}
+                                setTotalParentComment={setTotalParentComment}
                             />
                         </AnimationWrapper>
                     ))
@@ -98,7 +113,7 @@ const CommentField = ({ _id, action, blog_author, username, total_parent_comment
                 {
                     totalParentComment > commentArray.length
                         ? <button onClick={loadMoreFunction} className="text-dark-grey p-2 px-3 hover:bg-grey /30 rounded-md flex items-center gap-2">
-                            {`View ${totalParentComment  - commentArray.length} more comments...`}
+                            {`View ${totalParentComment - commentArray.length} more comments...`}
                         </button>
                         : <></>
                 }
