@@ -7,12 +7,13 @@ import { useContext, useEffect, useRef } from "react"
 import { EditorContext } from "../pages/editor.pages"
 import defaultBanner from "../imgs/blog banner.png"
 import EditorJS from "@editorjs/editorjs"
-import { toolBar } from "./tools.component"
+import { getToolBar } from "./tools.component"
 import axios from "axios"
 import { UserContext } from "../App"
 import Loader from "./loader.component"
+import DOMPurify from 'dompurify'
 
-// TODO: Implement DOMPurify to sanitize the inputs
+// DONE: Implement DOMPurify to sanitize the inputs
 const BlogEditor = () => {
     const context = useContext(EditorContext)
     const authContext = useContext(UserContext)
@@ -28,15 +29,15 @@ const BlogEditor = () => {
     const navigate = useNavigate()
 
     useEffect(() => {
-        if (!textEditor.isReady) {
+        if (access_token && !textEditor.isReady) {
             setTextEditor(new EditorJS({
                 holder: "textEditor",
                 data: Array.isArray(content) ? content[0] : content,
-                tools: toolBar,
+                tools: getToolBar(access_token),
                 placeholder: 'Start your story here...',
             }))
         }
-    }, [])
+    }, [access_token])
 
     const {
         blog: { title, banner, content, tags, des },
@@ -97,9 +98,15 @@ const BlogEditor = () => {
     const handleBannerUpload = async (e) => {
         let image = e.target.files[0]
 
+        const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg']
+
+        if (!allowedMimeTypes.includes(image.type)) {
+            return
+        }
+
         if (image) {
             let loadingToast = toast.loading('Uploading...')
-            const url = await uploadImage(image)
+            const url = await uploadImage(image, access_token)
 
             if (url) {
                 toast.dismiss(loadingToast)
@@ -135,6 +142,20 @@ const BlogEditor = () => {
                 let payload = {}
                 let requestLink = ''
 
+                content.blocks.forEach(item => {
+                    if (item?.data?.text) {
+                        return {
+                            ...item,
+                            data: {
+                                ...item.data,
+                                text: DOMPurify.sanitize(item.data.text)
+                            }
+                        }
+                    }
+
+                    return item
+                })
+
                 if (blog_id) {
                     requestLink = '/edit-blog'
                     payload = {
@@ -147,7 +168,7 @@ const BlogEditor = () => {
                         title, banner, des, content, tags, draft: true
                     }
                 }
-                
+
                 axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}${requestLink}`, payload, {
                     headers: {
                         'Authorization': `Bearer ${access_token}`

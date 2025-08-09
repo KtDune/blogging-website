@@ -20,6 +20,7 @@
     "is_number": "^0.0.1",
     "jsonwebtoken": "^9.0.1",
     "mongoose": "^7.3.2",
+    "multer": "^2.0.2",
     "nanoid": "^4.0.2"
   },
   "devDependencies": {

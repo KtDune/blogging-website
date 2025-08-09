@@ -8,7 +8,7 @@ import AnimationWrapper from "../common/page-animation"
 
 
 // TODO: use an index to track the deep of each comment, make sure if the comment is too deep it should not have any padding.
-// TODO: instead of using load more replies button consider using a comment button with how many replies to load comment.
+// DONE: instead of using load more replies button consider using a comment button with how many replies to load comment.
 // TODO: Should tag which user the comment is replying to by default.
 const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, blog_author, setParentArray, setTotalParentComment }) => {
 

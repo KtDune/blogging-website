@@ -46,7 +46,7 @@ const EditProfile = () => {
 
         if (updatedProfileImg) {
             let loadingToast = toast.loading('Uploading...')
-            const url = await uploadImage(updatedProfileImg)
+            const url = await uploadImage(updatedProfileImg, access_token)
 
             if (url) {
                 axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/update-profile-img`, {

@@ -19,7 +19,7 @@ const blogStructure = {
 export const EditorContext = createContext({})
 
 const Editor = () => {
-    const { userAuth: { access_token }, setUserAuth } = useContext(UserContext)
+    const { userAuth: { access_token } } = useContext(UserContext)
 
     const { blog_id } = useParams()
     const [blog, setBlog] = useState(blogStructure)

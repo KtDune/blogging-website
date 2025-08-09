@@ -8,9 +8,12 @@ import Quote from "@editorjs/quote"
 import InlineCode from "@editorjs/inline-code"
 import Delimiter from '@editorjs/delimiter';
 import { uploadImage } from "../common/firebase"
-import React from 'react';
+import React, { useContext, useMemo } from 'react';
 import axios from "axios"
+import DOMPurify from "dompurify"
+import { UserContext } from "../App"
 
+// TODO: Set maximum upload file size in firebase
 const uploadByUrl = (e) => {
     let link = new Promise((resolve, reject) => {
         try {
@@ -29,19 +32,24 @@ const uploadByUrl = (e) => {
     })
 }
 
-const uploadByFile = async (e) => {
-    return uploadImage(e)
-        .then(imageUrl => {
-            if (imageUrl) {
-                return {
-                    success: 1,
-                    file: { url: imageUrl }
-                };
-            }
-        });
-};
+const uploadByFile = async (e, access_token) => {
+    const imageUrl = await uploadImage(e, access_token);
 
-export const toolBar = {
+    if (imageUrl) {
+        return {
+            success: 1,
+            file: { url: imageUrl }
+        };
+    }
+
+    return {
+        success: 0,
+        file: null
+    };
+}
+
+// toolbarConfig.js
+export const getToolBar = (access_token) => ({
     embed: Embed,
     list: {
         class: List,
@@ -52,7 +60,7 @@ export const toolBar = {
         config: {
             uploader: {
                 uploadByUrl: uploadByUrl,
-                uploadByFile: uploadByFile,
+                uploadByFile: (file) => uploadByFile(file, access_token),
             }
         }
     },
@@ -70,79 +78,35 @@ export const toolBar = {
     },
     delimiter: Delimiter,
     inlineCode: InlineCode,
-}
+})
 
-// Helper to parse attributes inside tag string
-function parseAttributes(str) {
-    const attrRegex = /(\w+)=["'](.*?)["']/g;
-    const attrs = {};
-    let match;
-    while ((match = attrRegex.exec(str))) {
-        const key = match[1];
-        const value = match[2];
-        attrs[key === 'class' ? 'className' : key] = value;
-    }
-    return attrs;
-}
+export const parseHTMLString = (html) => {
 
-// Helper to split on <br> but first normalize &nbsp;
-function splitContentByBr(content) {
-    // 1️⃣ Replace all `&nbsp;` with a normal space
-    content = content.replace(/&nbsp;/g, ' ');
+    const reactElements = useMemo(() => {
+      const parser = new DOMParser()
 
-    // 2️⃣ Split on every <br> or <br /> (case‑insensitive)
-    const parts = content.split(/<br\s*\/?>/i);
-    const nodes = [];
-
-    parts.forEach((part, idx) => {
-        // also trim off any leftover whitespace
-        const txt = part.trim();
-        if (txt) {
-            // If it looks like HTML, recurse; otherwise just text
-            const node = txt.startsWith('<')
-                ? parseHTMLString(txt)
-                : txt;
-            nodes.push(node);
-        }
-        if (idx < parts.length - 1) {
-            nodes.push(React.createElement('br', { key: `br-${idx}` }));
-        }
-    });
-
-    if (nodes.length === 1) {
-        return nodes[0];
-    }
-    return React.createElement(React.Fragment, null, ...nodes);
-}
-
-
-// Recursive parser with &nbsp; normalization
-export function parseHTMLString(str) {
-    // 1️⃣ Normalize all `&nbsp;` → space, then trim
-    str = str.replace(/&nbsp;/g, ' ').trim();
-
-    // 2️⃣ If it’s plain text (no leading `<`), maybe contains <br>
-    if (!str.startsWith('<')) {
-        return str.includes('<br')
-            ? splitContentByBr(str)
-            : str;
-    }
-
-    // 3️⃣ Otherwise it must be a single root tag
-    const tagRegex = /^<(\w+)([^>]*)>([\s\S]*)<\/\1>$/i;
-    const match = str.match(tagRegex);
-    if (!match) {
-        throw new Error('Invalid HTML format');
-    }
-
-    const [, tag, attrString, innerContent] = match;
-    const attributes = parseAttributes(attrString);
-
-    // 4️⃣ Recurse into the inner content (also normalized for &nbsp;)
-    const children = splitContentByBr(innerContent);
-
-    return React.createElement(tag, attributes, children);
-}
+      const sanitizedHtml = DOMPurify.sanitize(html)
+      const doc = parser.parseFromString(sanitizedHtml, 'text/html');
+      const body = doc.body
+  
+      const convertNodeToReact = (node, key) => {
+        if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+        if (node.nodeType !== Node.ELEMENT_NODE) return null;
+  
+        const children = Array.from(node.childNodes).map((child, i) =>
+          convertNodeToReact(child, i)
+        );
+  
+        return React.createElement(node.tagName.toLowerCase(), { key }, ...children);
+      };
+  
+      return Array.from(body.childNodes).map((node, index) =>
+        convertNodeToReact(node, index)
+      );
+    }, [html])
+  
+    return <>{reactElements}</>
+  }
 
 export const fetchComments = async ({ skip = 0, blog_id, replyingTo = undefined }) => {
     try {

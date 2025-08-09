@@ -7,7 +7,10 @@ import { nanoid } from 'nanoid';
 import cors from 'cors'
 import admin from 'firebase-admin'
 import { getAuth } from 'firebase-admin/auth'
+import { getStorage } from 'firebase-admin/storage'
 import is_number from 'is_number'
+import path from 'path'
+import multer from 'multer'
 
 import User from './Schema/User.js'
 import Blog from './Schema/Blog.js'
@@ -25,12 +28,15 @@ server.use(express.json())
 server.use(cors())
 
 admin.initializeApp({
-    credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_ADMIN_JSON))
+    credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_ADMIN_JSON)),
+    storageBucket: process.env.FIREBASE_BUCKET_NAME
 })
 
 mongoose.connect(process.env.DB_LOCATION, {
     autoIndex: true,
 })
+
+const upload = multer({ storage: multer.memoryStorage() })
 
 const verifyJWT = (req, res, next) => {
 
@@ -38,12 +44,12 @@ const verifyJWT = (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1]
 
     if (!token) {
-        throw new ServerError('No access token', { code: 401 })
+        return res.status(401).json({ error: 'Unauthorized.' })
     }
 
     jwt.verify(token, process.env.SECRET_ACCESS_KEY, (err, user) => {
         if (err) {
-            throw new ServerError('Access token is invalid', { code: 401 })
+            return res.status(401).json({ error: 'Access token is invalid.' })
         }
 
         req.user = user.id
@@ -83,8 +89,52 @@ const formatResult = (user) => {
     }
 }
 
-// TODO: Implement string type checking for backend
-// TODO: Make sure to change all to either only use async/await or .then syntax
+const uploadToFirebaseBucket = async (file) => {
+    try {
+        const storage = getStorage()
+        const bucket = storage.bucket()
+
+        const timestamp = Date.now();
+        const ext = path.extname(file.originalname);
+        const filename = `${timestamp}_${file.originalname || `file_${Date.now()}`}`;
+
+        const fileRef = bucket.file(`bannerImg/${filename}`);
+
+        await fileRef.save(file.buffer, {
+            metadata: {
+                contentType: file.mimetype,
+            },
+        });
+
+        const [url] = await fileRef.getSignedUrl({
+            action: 'read',
+            expires: '03-01-2030',
+        });
+
+        return url;
+    } catch (error) {
+        console.error('Upload failed:', error);
+        return null
+    }
+};
+
+server.post('/upload-image', upload.single('image'), verifyJWT, async (req, res) => {
+    const image = req.file
+    if (!image) {
+        return res.status(400).json({ error: 'No image uploaded' })
+    }
+
+    const url = await uploadToFirebaseBucket(image)
+
+    if (url) {
+        return res.status(200).json({ url });
+    } else {
+        return res.status(500).json({ error: 'Upload failed' });
+    }
+})
+
+// DONE: Implement string type checking for backend
+// DONE: Make sure to change all to either only use async/await or .then syntax
 server.post('/signup', async (req, res) => {
     const { fullName, email, password } = req.body;
 
@@ -576,7 +626,7 @@ server.post('/get-blog', async (req, res) => {
     const { blog_id, draft, mode } = req.body;
     const incrementVal = mode !== 'edit' ? 1 : 0
 
-    if (typeof blog_id !== 'string' || typeof draft !== 'boolean' || typeof mode !== 'string') {
+    if (typeof blog_id !== 'string') {
         return res.status(400).json({ error: 'Please provide a valid value.' })
     }
 
@@ -756,7 +806,11 @@ server.post('/get-blog-comments', async (req, res) => {
     const { blog_id, skip = 0, replyingTo } = req.body;
     const maxLimit = 5
 
-    if (typeof blog_id !== 'string' || typeof replyingTo !== 'string' || !is_number(skip)) {
+    if (typeof blog_id !== 'string' || !is_number(skip)) {
+        return res.status(400).json({ error: 'Please provide a valid value.' })
+    }
+
+    if (replyingTo && typeof replyingTo !== 'string') {
         return res.status(400).json({ error: 'Please provide a valid value.' })
     }
 
@@ -846,7 +900,7 @@ server.post('/delete-comment', verifyJWT, async (req, res) => {
 })
 
 // TODO: Implement forgot password on user login page, an email needs to be sent to the user to verify if the account holder is sending the change password request.
-// TODO: currentPassword and newPassword should not be the same
+// DONE: currentPassword and newPassword should not be the same
 server.post('/change-password', verifyJWT, async (req, res) => {
     const user_id = req.user;
     const { currentPassword, newPassword } = req.body;

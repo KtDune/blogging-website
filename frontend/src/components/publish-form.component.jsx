@@ -6,6 +6,7 @@ import Tag from "./tags.component"
 import { UserContext } from "../App"
 import { useNavigate, useParams } from "react-router-dom"
 import axios from 'axios'
+import DOMPurify from "dompurify"
 
 const PublishForm = () => {
     const characterLimit = 200
@@ -72,6 +73,20 @@ const PublishForm = () => {
         let loadingToast = toast.loading('Publishing...')
 
         e.target.classList.add('disable')
+
+        content.blocks.forEach(item => {
+            if (item?.data?.text) {
+                return {
+                    ...item,
+                    data: {
+                        ...item.data,
+                        text: DOMPurify.sanitize(item.data.text)
+                    }
+                }
+            }
+
+            return item
+        })
 
         let payload = {}
         let requestLink = ''

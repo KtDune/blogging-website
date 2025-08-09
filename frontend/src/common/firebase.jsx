@@ -5,6 +5,8 @@ import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
 import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage"
 // https://firebase.google.com/docs/web/setup#available-libraries
 
+import axios from "axios"
+
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
@@ -20,7 +22,6 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const provider = new GoogleAuthProvider()
-const storage = getStorage(app)
 
 const analytics = getAnalytics(app)
 const auth = getAuth()
@@ -43,21 +44,24 @@ export const authWithGoogle = async () => {
 
 // TODO: Implement auth checking beofre user upload images.
 // TODO: Compress image before uploading
-export const uploadImage = async (image) => {
-
+// TODO: Add chinese translation for words
+export const uploadImage = async (image, access_token) => {
     try {
-        const imgName = image.name || `file_${new Date().getTime()}`
-        const imageRef = ref(storage, `bannerImg/${new Date().getTime()}_${imgName}`)
+        const { data } = await axios.post(
+            `${import.meta.env.VITE_SERVER_DOMAIN}/upload-image`,
+            { image },
+            {
+                headers: {
+                    Authorization: `Bearer ${access_token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            }
+        );
 
-        const uploadRef = await uploadBytes(imageRef, image)
-
-        const downloadUrl = await getDownloadURL(uploadRef.ref)
-
-        return downloadUrl
+        return data.url;
+    } catch (err) {
+        const error = err?.response?.data?.error || err.message;
+        console.error(error);
+        return null;
     }
-    catch (error) {
-        console.error(error)
-        return null
-    }
-
-}
+};

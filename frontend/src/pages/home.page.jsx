@@ -10,6 +10,7 @@ import WeatherComponent from "../components/weather.component"
 import NodataMessage from "../components/nodata.component"
 import LoadMoreDataBtn from "../components/load-more.component"
 
+// TODO: Implement image preload for all images
 const HomePage = () => {
     const [blogs, setBlogs] = useState(null)
     const [trendingBlogs, setTrendingBlogs] = useState(null)
