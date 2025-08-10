@@ -11,18 +11,28 @@ import { getStorage } from 'firebase-admin/storage'
 import is_number from 'is_number'
 import path from 'path'
 import multer from 'multer'
+import { fileTypeFromBuffer } from 'file-type'
+import { createRequire } from 'module'
 
 import User from './Schema/User.js'
 import Blog from './Schema/Blog.js'
 import Notification from './Schema/Notification.js'
 import Comment from './Schema/Comment.js'
-import { ServerError } from './ServerError.js';
+import { ServerError } from './ServerError.js'
+import { randomUUID } from 'crypto';
 
 const server = express()
+const require = createRequire(import.meta.url)
 
-let PORT = 8080
-let emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/; // regex for email
-let passwordRegex = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{6,20}$/; // regex for password
+const sharp = require('sharp')
+
+const PORT = 8080
+const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/; // regex for email
+const passwordRegex = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{6,20}$/; // regex for password
+
+const MAX_SIZE = 3 * 1024 * 1024; // 3MB
+const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp']
+const ALLOWED_EXTENSIONS = ['jpeg', 'png', 'jpg', 'webp']
 
 server.use(express.json())
 server.use(cors())
@@ -36,7 +46,10 @@ mongoose.connect(process.env.DB_LOCATION, {
     autoIndex: true,
 })
 
-const upload = multer({ storage: multer.memoryStorage() })
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: MAX_SIZE, // 3 MB 
+})
 
 const verifyJWT = (req, res, next) => {
 
@@ -89,34 +102,33 @@ const formatResult = (user) => {
     }
 }
 
-const uploadToFirebaseBucket = async (file) => {
+const uploadToFirebaseBucket = async (buffer, contentType = "image/webp") => {
     try {
-        const storage = getStorage()
-        const bucket = storage.bucket()
+        const storage = getStorage();
+        const bucket = storage.bucket();
 
-        const timestamp = Date.now();
-        const ext = path.extname(file.originalname);
-        const filename = `${timestamp}_${file.originalname || `file_${Date.now()}`}`;
+        // Random file name + webp extension
+        const filename = `bannerImg/${randomUUID()}.webp`;
 
-        const fileRef = bucket.file(`bannerImg/${filename}`);
+        const fileRef = bucket.file(filename);
 
-        await fileRef.save(file.buffer, {
-            metadata: {
-                contentType: file.mimetype,
-            },
+        // Save binary buffer directly
+        await fileRef.save(buffer, {
+            metadata: { contentType },
+            resumable: false // speeds up for small files
         });
 
+        // Generate signed URL
         const [url] = await fileRef.getSignedUrl({
-            action: 'read',
-            expires: '03-01-2030',
-        });
+            action: "read",
+            expires: "08-02-2074",
+        })
 
         return url;
     } catch (error) {
-        console.error('Upload failed:', error);
-        return null
+        return null;
     }
-};
+}
 
 server.post('/upload-image', upload.single('image'), verifyJWT, async (req, res) => {
     const image = req.file
@@ -124,12 +136,49 @@ server.post('/upload-image', upload.single('image'), verifyJWT, async (req, res)
         return res.status(400).json({ error: 'No image uploaded' })
     }
 
-    const url = await uploadToFirebaseBucket(image)
+    if (!ALLOWED_MIME.includes(image.mimetype)) {
+        return res.status(400).json({ error: 'Unsupported file type.' })
+    }
 
-    if (url) {
-        return res.status(200).json({ url });
-    } else {
-        return res.status(500).json({ error: 'Upload failed' });
+    if (image.size > MAX_SIZE) {
+        return res.status(400).json({ error: 'File is too large.' })
+    }
+
+    try {
+
+        const buffer = await fileTypeFromBuffer(image.buffer)
+
+        if (buffer) {
+
+            if (
+                !ALLOWED_EXTENSIONS.includes(buffer.ext)
+                || !ALLOWED_MIME.includes(buffer.mime)
+            ) {
+                return res.status(400).json({ error: 'Please provide data with correct ext / mime types.' })
+            }
+
+        }
+        else {
+            return res.status(500).json({ error: 'Error converting bytes to files.' })
+        }
+
+        const resizedBuffer = await sharp(image.buffer)
+            .webp({ quality: 75 })
+            .toBuffer();
+
+        const url = await uploadToFirebaseBucket(resizedBuffer, "image/webp")
+
+        if (url) {
+            return res.status(200).json({ url });
+        } else {
+            return res.status(500).json({ error: 'Upload failed' });
+        }
+
+
+    }
+    catch (err) {
+        console.error(err)
+        return res.status(500).json({ error: 'Internal server error.' })
     }
 })
 
