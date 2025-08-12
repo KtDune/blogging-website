@@ -9,7 +9,6 @@ import admin from 'firebase-admin'
 import { getAuth } from 'firebase-admin/auth'
 import { getStorage } from 'firebase-admin/storage'
 import is_number from 'is_number'
-import path from 'path'
 import multer from 'multer'
 import { fileTypeFromBuffer } from 'file-type'
 import { createRequire } from 'module'
@@ -83,6 +82,10 @@ function isPlainObject(value) {
 const generateUsername = async (email) => {
     let username = email.split('@')[0]
 
+    if (username.length < 3) {
+        return null
+    }
+
     let usernameExist = await User.exists({ "personal_info.username": username })
         .then((res) => res)
 
@@ -127,6 +130,21 @@ const uploadToFirebaseBucket = async (buffer, contentType = "image/webp") => {
         return url;
     } catch (error) {
         return null;
+    }
+}
+
+const deleteFromBucket = async (url) => {
+    const bucket = admin.storage().bucket()
+
+    try {
+
+        await bucket.file(url).delete();
+        
+        return true
+
+    } 
+    catch (err) {
+        return false
     }
 }
 
@@ -182,6 +200,37 @@ server.post('/upload-image', upload.single('image'), verifyJWT, async (req, res)
     }
 })
 
+server.post('/delete-image', verifyJWT, async (req, res) => {
+    const { url } = req.body
+
+    if (typeof url !== 'string' || !url) {
+        return res.status(400).json({ error: 'Please provide an url.' })
+    }
+
+    const match = url.match(/\/bannerImg\/([^?]+)/)
+    if (!match || !match[1]) {
+        return res.status(400).json({ error: 'Invalid url syntax' })
+    }
+
+    try {
+
+        const decodedPath = decodeURIComponent(`bannerImg/${match[1]}`)
+        const result = await deleteFromBucket(decodedPath)
+
+        if (result) {
+            return res.status(200).json({ result })
+        }
+        else {
+            return res.status(500).json({ result })
+        }
+
+    }
+    catch (err) {
+        console.error(err)
+        return res.status(500).json({ error: 'Internal server error.' })
+    }
+})
+
 // DONE: Implement string type checking for backend
 // DONE: Make sure to change all to either only use async/await or .then syntax
 server.post('/signup', async (req, res) => {
@@ -212,7 +261,11 @@ server.post('/signup', async (req, res) => {
 
     try {
         const hashed_password = await bcrypt.hash(password, 10);
-        const username = await generateUsername(email);
+        const username = await generateUsername(email)
+
+        if (username === null) {
+            return res.status(400).json({ error: 'Please provide an email with longer name.' })
+        }
 
         const user = new User({
             personal_info: {
@@ -851,6 +904,8 @@ server.post("/add-comment", verifyJWT, async (req, res) => {
     }
 })
 
+
+// TODO: Perform rate limiting for all method to prevent DDoS
 server.post('/get-blog-comments', async (req, res) => {
     const { blog_id, skip = 0, replyingTo } = req.body;
     const maxLimit = 5

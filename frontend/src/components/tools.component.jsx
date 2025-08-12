@@ -48,6 +48,45 @@ const uploadByFile = async (e, access_token) => {
     };
 }
 
+export const deleteImage = async (url, access_token) => {
+    try {
+        const { data } = await axios.post(
+            `${import.meta.env.VITE_SERVER_DOMAIN}/delete-image`,
+            { url },
+            {
+                headers: {
+                    Authorization: `Bearer ${access_token}`,
+                }
+            }
+        )
+
+        if (data?.result) {
+            return { success: 1 }
+        }
+        else {
+            return { success: 0 }
+        }
+    }
+    catch (err) {
+        const error = err?.response?.data?.error || err.message;
+        console.error(error)
+    }
+}
+
+// Extend the image tool to enhance the image removal lifecycle
+class CustomImage extends Image {
+    constructor(editorConfig){
+        super(editorConfig)
+
+        this.access_token = editorConfig?.config?.access_token
+    }
+
+    removed() {
+        const { file: { url } } = this._data
+        deleteImage(url, this.access_token);
+    }
+}
+
 // toolbarConfig.js
 export const getToolBar = (access_token) => ({
     embed: Embed,
@@ -56,13 +95,14 @@ export const getToolBar = (access_token) => ({
         inlineToolbar: true,
     },
     image: {
-        class: Image,
+        class: CustomImage,
         config: {
+            access_token,
             uploader: {
                 uploadByUrl: uploadByUrl,
                 uploadByFile: (file) => uploadByFile(file, access_token),
-            }
-        }
+            },
+        },
     },
     header: {
         class: Header,
@@ -83,30 +123,30 @@ export const getToolBar = (access_token) => ({
 export const parseHTMLString = (html) => {
 
     const reactElements = useMemo(() => {
-      const parser = new DOMParser()
+        const parser = new DOMParser()
 
-      const sanitizedHtml = DOMPurify.sanitize(html)
-      const doc = parser.parseFromString(sanitizedHtml, 'text/html');
-      const body = doc.body
-  
-      const convertNodeToReact = (node, key) => {
-        if (node.nodeType === Node.TEXT_NODE) return node.textContent;
-        if (node.nodeType !== Node.ELEMENT_NODE) return null;
-  
-        const children = Array.from(node.childNodes).map((child, i) =>
-          convertNodeToReact(child, i)
+        const sanitizedHtml = DOMPurify.sanitize(html)
+        const doc = parser.parseFromString(sanitizedHtml, 'text/html');
+        const body = doc.body
+
+        const convertNodeToReact = (node, key) => {
+            if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+            if (node.nodeType !== Node.ELEMENT_NODE) return null;
+
+            const children = Array.from(node.childNodes).map((child, i) =>
+                convertNodeToReact(child, i)
+            );
+
+            return React.createElement(node.tagName.toLowerCase(), { key }, ...children);
+        };
+
+        return Array.from(body.childNodes).map((node, index) =>
+            convertNodeToReact(node, index)
         );
-  
-        return React.createElement(node.tagName.toLowerCase(), { key }, ...children);
-      };
-  
-      return Array.from(body.childNodes).map((node, index) =>
-        convertNodeToReact(node, index)
-      );
     }, [html])
-  
+
     return <>{reactElements}</>
-  }
+}
 
 export const fetchComments = async ({ skip = 0, blog_id, replyingTo = undefined }) => {
     try {

@@ -8,6 +8,7 @@ import Loader from "../components/loader.component"
 import InputBox from "../components/input.component"
 import { uploadImage } from "../common/firebase"
 import { storeInSession } from "../common/session"
+import { deleteImage } from "../components/tools.component"
 
 const EditProfile = () => {
 
@@ -40,7 +41,7 @@ const EditProfile = () => {
         setUpdatedProfileImg(img)
     }
 
-    // TODO: Delete the current image after the new image has been updated. Only delete the image if it is not default image.
+    // DONE: Delete the current image after the new image has been updated. Only delete the image if it is not default image.
     const handleImageUploadFunction = async (e) => {
         e.preventDefault()
 
@@ -49,6 +50,12 @@ const EditProfile = () => {
             const url = await uploadImage(updatedProfileImg, access_token)
 
             if (url) {
+
+                // If the profile img is not default image, then delete the current image.
+                if (!userAuth.profile_img.match(/^(?:https?:\/\/)?api\.dicebear\.com(?:\/|$)/)) {
+                    await deleteImage(userAuth.profile_img, access_token)
+                }
+
                 axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/update-profile-img`, {
                     url
                 }, {
@@ -174,7 +181,7 @@ const EditProfile = () => {
                                     </div>
                                 </label>
 
-                                <input type="file" id="uploadedImg" accept=".jpeg, .png, .jpg" hidden onChange={handleImagePreview} />
+                                <input type="file" id="uploadedImg" accept=".jpeg, .png, .jpg, .webp" hidden onChange={handleImagePreview} />
 
                                 <button type="button" className="btn-light mt-5 max-lg:center lg:full px-10" onClick={handleImageUploadFunction}>Upload</button>
                             </div>

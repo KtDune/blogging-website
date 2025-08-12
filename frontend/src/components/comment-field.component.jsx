@@ -12,10 +12,11 @@ const CommentField = ({ _id, action, blog_author, username, total_parent_comment
     const [commentArray, setCommentArray] = useState([])
     const [skip, setSkip] = useState(0)
     const { userAuth: { access_token, username: logged_in_user, fullname: logged_in_user_fullname, profile_img: logged_in_user_profImg } } = useContext(UserContext)
-    const [totalParentComment, setTotalParentComment] = useState(total_parent_comment) // params are immutable, a state is required to track the changes
+    const [totalParentComment, setTotalParentComment] = useState(0) // params are immutable, a state is required to track the changes
 
     useEffect(() => {
         setSkip(0)
+        setTotalParentComment(total_parent_comment)
         const initialize = async () => {
             const result = await fetchComments({ skip, blog_id: _id })
             setCommentArray([...result])

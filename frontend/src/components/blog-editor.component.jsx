@@ -7,13 +7,14 @@ import { useContext, useEffect, useRef } from "react"
 import { EditorContext } from "../pages/editor.pages"
 import defaultBanner from "../imgs/blog banner.png"
 import EditorJS from "@editorjs/editorjs"
-import { getToolBar } from "./tools.component"
+import { getToolBar, deleteImage } from "./tools.component"
 import axios from "axios"
 import { UserContext } from "../App"
 import Loader from "./loader.component"
 import DOMPurify from 'dompurify'
 
 // DONE: Implement DOMPurify to sanitize the inputs
+// TODO: The '+' button will be hidden under certain screen width
 const BlogEditor = () => {
     const context = useContext(EditorContext)
     const authContext = useContext(UserContext)
@@ -111,6 +112,10 @@ const BlogEditor = () => {
             if (url) {
                 toast.dismiss(loadingToast)
                 toast.success('Uploaded! 👍')
+
+                if (banner) {
+                    await deleteImage(banner, access_token)
+                }
 
                 setBlog(prev => ({ ...prev, banner: url }))
             }
@@ -237,7 +242,7 @@ const BlogEditor = () => {
                                     <input
                                         id="uploadBanner"
                                         type="file"
-                                        accept=".png, .jpg, .jpeg"
+                                        accept=".png, .jpg, .jpeg, .webp"
                                         hidden
                                         onChange={handleBannerUpload}
                                     />

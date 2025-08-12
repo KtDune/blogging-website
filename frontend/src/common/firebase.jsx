@@ -65,4 +65,4 @@ export const uploadImage = async (image, access_token) => {
         console.error(error);
         return null;
     }
-};
+}

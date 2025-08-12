@@ -18,6 +18,7 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
         commentedAt,
         comment: user_comment,
         children,
+        parent,
         isReply
     } = comment
 
@@ -117,14 +118,26 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
                 toast.dismiss(loadingToast)
                 toast.success('Deleted!👍')
 
-                children.map(item => item._id !== comment_id)
-                setParentArray(prev => {
-                    const updated = JSON.parse(JSON.stringify([...prev]))
+                // children.map(item => item._id !== comment_id)
+                // setParentArray(prev => {
+                //     const updated = JSON.parse(JSON.stringify([...prev]))
                     
-                    const deletedCmtPos = updated.findIndex((item) => item._id === comment_id)
-                    updated.splice(deletedCmtPos, 1)
-                    return updated
+                //     const deletedCmtPos = updated.findIndex((item) => item._id === comment_id)
+                //     updated.splice(deletedCmtPos, 1)
+                //     return updated
+                // })
+                console.log(comment)
+                const payload = { skip: 0, blog_id, replyingTo: (isReply ? parent : undefined) } // I am passing the id of the deleted cmt instead of id of the parent comment
+                fetchComments(payload)
+                .then(data => {
+                    setParentArray(prev => {
+
+                        setTotalParentComment(prev => prev - 1)
+
+                        return data
+                    })
                 })
+
             })
     }
 

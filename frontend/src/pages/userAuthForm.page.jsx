@@ -47,7 +47,7 @@ const UserAuthForm = (props) => {
     }
 
     const handleSubmit = (e) => {
-        e.preventDefault() // Prevent fomr from submitting
+        e.preventDefault() // Prevent form from submitting
 
         // Retrieve form data
         let form = new FormData(authForm)
@@ -70,6 +70,10 @@ const UserAuthForm = (props) => {
 
         if (!emailRegex.test(email)) {
             return toast.error('Invalid email format')
+        }
+
+        if (email.split('@')[0].length < 3) {
+            return toast.error('Please provide an email with longer name.')
         }
 
         if (!password) {
