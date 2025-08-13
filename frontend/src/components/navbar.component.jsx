@@ -6,10 +6,16 @@ import UserNavigationPanel from "./user-navigation.component"
 
 const Navbar = () => {
 
+    const userContext = useContext(UserContext)
+
+    if (!userContext) {
+        return <Loader />
+    }
+
     const [searchBoxVisibility, setSearchBoxVisibility] = useState(false)
     const [userNavPanel, setUserNavPanel] = useState(false)
     const [query, setQuery] = useState('')
-    const { userAuth: { access_token, profile_img } } = useContext(UserContext)
+    const { userAuth: { access_token, profile_img } } = userContext
     const navigate = useNavigate()
 
     const handleSearchFunction = (e) => {

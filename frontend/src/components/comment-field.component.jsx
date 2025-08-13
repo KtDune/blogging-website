@@ -89,7 +89,7 @@ const CommentField = ({ _id, action, blog_author, username, total_parent_comment
                 placeholder="Leave a comment"
                 className="input-box pl-5 placeholder:text-dark-grey resize-none h-[150px] overflow-auto"
             />
-            <button type="button" onClick={handleComment} className="btn-dark mt-5 px-10">{action}</button>
+            <button type="button" onClick={handleComment} className="btn-dark my-5 px-10">{action}</button>
 
             <>
                 {

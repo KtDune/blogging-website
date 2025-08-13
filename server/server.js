@@ -139,10 +139,10 @@ const deleteFromBucket = async (url) => {
     try {
 
         await bucket.file(url).delete();
-        
+
         return true
 
-    } 
+    }
     catch (err) {
         return false
     }
@@ -858,8 +858,7 @@ server.post("/add-comment", verifyJWT, async (req, res) => {
             ...(isReply && { parent: replying_to })
         };
 
-        const commentDoc = await new Comment(commentData).save();
-        const { commentedAt, children } = commentDoc;
+        const commentDoc = await new Comment(commentData).save()
 
         // Update blog's comment array and activity counts
         await Blog.findOneAndUpdate(
@@ -895,9 +894,16 @@ server.post("/add-comment", verifyJWT, async (req, res) => {
             ...(isReply && { replied_on_comment: replying_to })
         });
 
-        await notification.save();
+        await notification.save()
 
-        return res.status(200).json(commentDoc);
+        const { parent } = commentDoc
+        const parentData = await Comment.findOne({ _id: parent })
+            .populate("commented_by", "personal_info.username")
+            .select('_id, personal_info.username')
+
+        commentDoc.parent = parentData
+
+        return res.status(200).json(commentDoc)
 
     } catch (err) {
         return res.status(err.code || 500).json({ error: err.message });
@@ -925,9 +931,17 @@ server.post('/get-blog-comments', async (req, res) => {
 
         const comments = await Comment.find(query)
             .populate("commented_by", "personal_info.username personal_info.fullname personal_info.profile_img")
+            .populate({
+                path: "parent",
+                select: "commented_by",
+                populate: {
+                    path: "commented_by",
+                    select: "personal_info.username"
+                }
+            })
             .sort({ commentedAt: -1 })
             .skip(Number(skip))
-            .limit(maxLimit);
+            .limit(maxLimit)
 
         return res.status(200).json(comments);
 

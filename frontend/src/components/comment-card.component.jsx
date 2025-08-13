@@ -5,11 +5,15 @@ import toast, { Toaster } from "react-hot-toast"
 import axios from "axios"
 import { fetchComments } from "./tools.component"
 import AnimationWrapper from "../common/page-animation"
+import { Link } from "react-router-dom"
+import Loader from "./loader.component"
 
 
-// TODO: use an index to track the deep of each comment, make sure if the comment is too deep it should not have any padding.
+// DONE: use an index to track the deep of each comment, make sure if the comment is too deep it should not have any padding.
 // DONE: instead of using load more replies button consider using a comment button with how many replies to load comment.
-// TODO: Should tag which user the comment is replying to by default.
+// DONE: Should tag which user the comment is replying to by default.
+// TODO: Encode username before querying, if username cannot be found then just navigate to error page.
+// TODO: Add loader while sending request to server.
 const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, blog_author, setParentArray, setTotalParentComment }) => {
 
     const {
@@ -27,6 +31,7 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
     const [reply, setReply] = useState('')
     const [replyArray, setReplyArray] = useState([])
     const [childrenLength, setChildrenLength] = useState(0)
+    const [isLoading, setIsLoading] = useState(false)
 
     useEffect(() => {
         setChildrenLength(children.length)
@@ -94,13 +99,15 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
     }
 
     const loadMoreFunction = async () => {
+        setIsLoading(true)
         const result = await fetchComments({ skip, blog_id, replyingTo: comment_id })
-      
+
         setReplyArray(prevCmt => [...prevCmt, ...result])
         const newSkip = skip + 5
         setSkip(newSkip)
-      }
-      
+        setIsLoading(false)
+    }
+
 
     const deleteCommentsFunction = (e) => {
         e.target.setAttribute('disabled', true)
@@ -118,25 +125,16 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
                 toast.dismiss(loadingToast)
                 toast.success('Deleted!👍')
 
-                // children.map(item => item._id !== comment_id)
-                // setParentArray(prev => {
-                //     const updated = JSON.parse(JSON.stringify([...prev]))
-                    
-                //     const deletedCmtPos = updated.findIndex((item) => item._id === comment_id)
-                //     updated.splice(deletedCmtPos, 1)
-                //     return updated
-                // })
-                console.log(comment)
-                const payload = { skip: 0, blog_id, replyingTo: (isReply ? parent : undefined) } // I am passing the id of the deleted cmt instead of id of the parent comment
+                const payload = { skip: 0, blog_id, replyingTo: (isReply ? parent?._id : undefined) } // I am passing the id of the deleted cmt instead of id of the parent comment
                 fetchComments(payload)
-                .then(data => {
-                    setParentArray(prev => {
+                    .then(data => {
+                        setParentArray(prev => {
 
-                        setTotalParentComment(prev => prev - 1)
+                            setTotalParentComment(prev => prev - 1)
 
-                        return data
+                            return data
+                        })
                     })
-                })
 
             })
     }
@@ -144,15 +142,24 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
     return (
         <>
             <Toaster />
-            <div className="w-full" style={{ paddingLeft: `${isReply ? '50px' : '10px'}` }}>
-                <div className={`my-5 ${!isReply ? 'p-6' : 'pt-6'} rounded-md border-grey`}>
+            <div className="w-full my-8">
+                <div className={`my-5 rounded-md border-grey`}>
                     <div className="flex gap-4 items-center mb-8">
                         <img src={profile_img} className="w-6 h-6 rounded-full" />
                         <p className="line-clamp-1">{fullname} @{username}</p>
                         <p className="min-w-fit">{getDay(commentedAt)}</p>
                     </div>
 
-                    <p className="font-gelasio text-xl ml-3">{user_comment}</p>
+                    <p className="font-gelasio text-xl ml-3">
+                        {isReply && (
+                            <>
+                                Replying to <Link to={`/user/${encodeURIComponent(parent?.commented_by?.personal_info?.username)}`} className="text-dark-grey italic">@{parent?.commented_by?.personal_info?.username}</Link>:
+                            </>
+                        )}
+                        {' '}
+                        {user_comment}
+                    </p>
+
 
                     <div className="flex gap-5 justify-between mt-5 ml-3 text-sm text-dark-grey">
                         <button onClick={handleReplyClick}>Reply</button>
@@ -186,15 +193,17 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
                             ? replyArray.map((reply, i) => {
                                 return (
                                     <AnimationWrapper key={reply._id}>
-                                        <CommentCard
-                                            comment={reply}
-                                            _id={blog_id}
-                                            blog_author={blog_author}
-                                            username={username}
-                                            index={i}
-                                            setParentArray={setReplyArray}
-                                            setTotalParentComment={setChildrenLength}
-                                        />
+                                        <div className={!isReply ? "ml-10" : ""}>
+                                            <CommentCard
+                                                comment={reply}
+                                                _id={blog_id}
+                                                blog_author={blog_author}
+                                                username={username}
+                                                index={i}
+                                                setParentArray={setReplyArray}
+                                                setTotalParentComment={setChildrenLength}
+                                            />
+                                        </div>
                                     </AnimationWrapper>
                                 )
                             })
@@ -203,11 +212,13 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
 
 
                     {
-                        childrenLength > replyArray.length
-                            ? <div className="flex gap-5 items-center mt-5 ml-3 text-sm text-dark-grey">
-                                <button onClick={loadMoreFunction}>{`View ${childrenLength - replyArray.length} more replies...`}</button>
-                            </div>
-                            : <></>
+                        !isLoading
+                            ? childrenLength > replyArray.length
+                                ? <div className="flex gap-5 items-center mt-5 ml-3 text-sm text-dark-grey">
+                                    <button onClick={loadMoreFunction}>{`View ${childrenLength - replyArray.length} more replies...`}</button>
+                                </div>
+                                : <></>
+                            : <Loader />
                     }
                 </div>
             </div>
