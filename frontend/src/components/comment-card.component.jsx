@@ -12,9 +12,9 @@ import Loader from "./loader.component"
 // DONE: use an index to track the deep of each comment, make sure if the comment is too deep it should not have any padding.
 // DONE: instead of using load more replies button consider using a comment button with how many replies to load comment.
 // DONE: Should tag which user the comment is replying to by default.
-// TODO: Encode username before querying, if username cannot be found then just navigate to error page.
-// TODO: Add loader while sending request to server.
-const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, blog_author, setParentArray, setTotalParentComment }) => {
+// DONE: Encode username before querying, if username cannot be found then just navigate to error page.
+// DONE: Add loader while sending request to server.
+const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, blog_author, setParentArray, setTotalParentComment, isLoading, setIsLoading, setParentSkip }) => {
 
     const {
         _id: comment_id,
@@ -31,7 +31,6 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
     const [reply, setReply] = useState('')
     const [replyArray, setReplyArray] = useState([])
     const [childrenLength, setChildrenLength] = useState(0)
-    const [isLoading, setIsLoading] = useState(false)
 
     useEffect(() => {
         setChildrenLength(children.length)
@@ -46,46 +45,47 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
         }
     } = useContext(UserContext)
 
-    const handleComment = (e) => {
+    const handleComment = async (e) => {
         e.preventDefault()
-
+        if (isLoading) return
         if (!access_token) {
             toast.error('Please login to add a comment')
-
             return
         }
-
         if (!reply.length) {
-            toast.error('Please enter a comment before publising your comment.')
-
+            toast.error('Please enter a comment before publishing your comment.')
             return
         }
 
-        axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/add-comment`, {
-            _id: blog_id, comment: reply, blog_author, replying_to: comment_id
-        }, {
-            headers: {
-                'Authorization': `Bearer ${access_token}`
-            }
-        })
-            .then(({ data }) => {
-                setReply('')
-                setIsReplying(false)
-                data.commented_by = {
-                    personal_info:
-                    {
-                        username: logged_in_user,
-                        fullname: logged_in_user_fullname,
-                        profile_img: logged_in_user_profImg
-
-                    }
-                }
-                setReplyArray(prev => [data, ...prev])
-                setChildrenLength(prev => prev + 1)
+        const loading = toast.loading('Adding...')
+        setIsLoading(prev => true)
+        try {
+            const { data } = await axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/add-comment`, {
+                _id: blog_id, comment: reply, blog_author, replying_to: comment_id
+            }, {
+                headers: { 'Authorization': `Bearer ${access_token}` }
             })
-            .catch((error) => console.error(error))
 
+            setReply('')
+            setIsReplying(false)
+            data.commented_by = {
+                personal_info: {
+                    username: logged_in_user,
+                    fullname: logged_in_user_fullname,
+                    profile_img: logged_in_user_profImg
+                }
+            }
+            setReplyArray(prev => [data, ...prev])
+            setSkip(prev => prev + 1)
+            setChildrenLength(prev => prev + 1)
+        } catch (error) {
+            console.error(error)
+        } finally {
+            toast.dismiss(loading)
+            setIsLoading(prev => false) // ✅ only reset after request finishes
+        }
     }
+
 
     const handleReplyClick = () => {
         if (!access_token) {
@@ -99,50 +99,65 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
     }
 
     const loadMoreFunction = async () => {
-        setIsLoading(true)
-        const result = await fetchComments({ skip, blog_id, replyingTo: comment_id })
+        if (isLoading) {
+            return
+        }
 
-        setReplyArray(prevCmt => [...prevCmt, ...result])
-        const newSkip = skip + 5
-        setSkip(newSkip)
-        setIsLoading(false)
+        const loading = toast.loading('Loading...')
+        try {
+            setIsLoading(prev => true)
+            const result = await fetchComments({ skip, blog_id, replyingTo: comment_id })
+
+            setReplyArray(prevCmt => [...prevCmt, ...result])
+            const newSkip = skip + 5
+            setSkip(newSkip)
+        }
+        catch (err) {
+            console.error(err)
+        }
+        finally {
+            toast.dismiss(loading)
+            setIsLoading(prev => false)
+        }
     }
 
-
-    const deleteCommentsFunction = (e) => {
+    const deleteCommentsFunction = async (e) => {
+        if (isLoading) return
         e.target.setAttribute('disabled', true)
-        let loadingToast = toast.loading('Deleting...')
+        const loadingToast = toast.loading('Deleting...')
 
-        axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/delete-comment`, {
-            _id: comment_id
-        }, {
-            headers: {
-                'Authorization': `Bearer ${access_token}`
-            }
-        })
-            .then(() => {
-                e.target.removeAttribute('disabled', false)
-                toast.dismiss(loadingToast)
-                toast.success('Deleted!👍')
-
-                const payload = { skip: 0, blog_id, replyingTo: (isReply ? parent?._id : undefined) } // I am passing the id of the deleted cmt instead of id of the parent comment
-                fetchComments(payload)
-                    .then(data => {
-                        setParentArray(prev => {
-
-                            setTotalParentComment(prev => prev - 1)
-
-                            return data
-                        })
-                    })
-
+        setIsLoading(prev => true)
+        try {
+            await axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/delete-comment`, {
+                _id: comment_id
+            }, {
+                headers: { 'Authorization': `Bearer ${access_token}` }
             })
+
+            toast.dismiss(loadingToast)
+            toast.success('Deleted!👍')
+
+            const payload = { skip: 0, blog_id, replyingTo: (isReply ? parent?._id : undefined) }
+            const data = await fetchComments(payload)
+            setParentArray(() => {
+                setTotalParentComment(prev => prev - 1)
+                setParentSkip(prev => prev - 1)
+                return data
+            })
+        } catch (error) {
+            console.error(error)
+        } finally {
+            toast.dismiss(loadingToast)
+            e.target.removeAttribute('disabled')
+            setIsLoading(prev => false) // ✅ moved here
+        }
     }
+
 
     return (
         <>
             <Toaster />
-            <div className="w-full my-8">
+            <div className={`w-full my-8`}>
                 <div className={`my-5 rounded-md border-grey`}>
                     <div className="flex gap-4 items-center mb-8">
                         <img src={profile_img} className="w-6 h-6 rounded-full" />
@@ -166,7 +181,7 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
 
                         {
                             access_token && (logged_in_user === username || logged_in_user === blog_author_username)
-                                ? <button onClick={deleteCommentsFunction}>
+                                ? <button onClick={deleteCommentsFunction} disabled={isLoading}>
                                     <i className="fi fi-rs-trash p-2 px-3 rounded-md border border-grey  hover:bg-red/30 hover:text-red pointer-events-none" />
                                 </button>
                                 : <></>
@@ -182,7 +197,7 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
                                         placeholder="Leave a comment"
                                         className="input-box pl-5 placeholder:text-dark-grey resize-none h-[150px] overflow-auto"
                                     />
-                                    <button type="button" onClick={handleComment} className="btn-dark mt-5 px-10">Reply</button>
+                                    <button type="button" onClick={handleComment} className="btn-dark mt-5 px-10" disabled={isLoading}>Reply</button>
                                 </div>
                                 : <></>
                         }
@@ -202,6 +217,9 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
                                                 index={i}
                                                 setParentArray={setReplyArray}
                                                 setTotalParentComment={setChildrenLength}
+                                                isLoading={isLoading}
+                                                setIsLoading={setIsLoading}
+                                                setParentSkip={setSkip}
                                             />
                                         </div>
                                     </AnimationWrapper>
@@ -212,13 +230,11 @@ const CommentCard = ({ comment, _id: blog_id, username: blog_author_username, bl
 
 
                     {
-                        !isLoading
-                            ? childrenLength > replyArray.length
-                                ? <div className="flex gap-5 items-center mt-5 ml-3 text-sm text-dark-grey">
-                                    <button onClick={loadMoreFunction}>{`View ${childrenLength - replyArray.length} more replies...`}</button>
-                                </div>
-                                : <></>
-                            : <Loader />
+                        childrenLength > replyArray.length
+                            ? <div className="flex gap-5 items-center mt-5 ml-3 text-sm text-dark-grey">
+                                <button onClick={loadMoreFunction} disabled={isLoading}>{`View ${childrenLength - replyArray.length} more replies...`}</button>
+                            </div>
+                            : <></>
                     }
                 </div>
             </div>
