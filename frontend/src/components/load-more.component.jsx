@@ -2,6 +2,7 @@ const LoadMoreDataBtn = ({ state, setCurPage, curPage }) => {
     const maxLimit = 5; // max data backend sends each time
   
     // Guard clause: render nothing if state is null or total is 0
+    // TODO: This component should not accept all items, rewrite it to only accept total amount of data left.
     if (!state || state.total === 0) {
       return null;
     }

@@ -20,6 +20,7 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
+// TODO: Change signInWithPopup to signInWithRedirect, see if it would work or not
 const app = initializeApp(firebaseConfig);
 const provider = new GoogleAuthProvider()
 

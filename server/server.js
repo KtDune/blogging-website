@@ -837,7 +837,7 @@ server.post('/is-liked-by-user', verifyJWT, async (req, res) => {
 
 server.post("/add-comment", verifyJWT, async (req, res) => {
     const user_id = req.user;
-    const { _id, comment, blog_author, replying_to } = req.body
+    const { _id, comment, blog_author, replying_to, notification_id } = req.body
 
     if (typeof comment !== 'string' || typeof blog_author !== 'string' || typeof _id !== 'string') {
         return res.status(400).json({ error: 'Please provide a valid value.' })
@@ -879,9 +879,14 @@ server.post("/add-comment", verifyJWT, async (req, res) => {
                 replying_to,
                 { $push: { children: commentDoc._id } },
                 { new: true }
-            );
+            )
             if (parentComment) {
                 notifyUser = parentComment.commented_by;
+            }
+
+            // Whats the purpose of this line...
+            if (notification_id) {
+                await Notification.findByIdAndUpdate({ _id: notification_id }, { reply: commentDoc._id })
             }
         }
 
@@ -954,7 +959,7 @@ const deleteComment = async (_id) => {
 
     await Comment.findOneAndDelete({ _id })
         .then(async (cmt) => {
-            if (cmt.isReply) {
+            if (cmt?.isReply) {
                 await Comment.findOneAndUpdate({ _id: cmt.parent }, { $pull: { children: _id } })
                     .then(data => { })
                     .catch(err => {
@@ -980,7 +985,7 @@ const deleteComment = async (_id) => {
                     throw new ServerError(err.message, { code: 500 })
                 })
 
-            await Blog.findOneAndUpdate({ _id: cmt.blog_id }, { $inc: { "activity.total_comments": -1, "activity.total_parent_comments": cmt.isReply ? 0 : -1 } })
+            await Blog.findOneAndUpdate({ _id: cmt.blog_id }, { $inc: { "activity.total_comments": -1, "activity.total_parent_comments": cmt?.isReply ? 0 : -1 } })
                 .then(blog => { })
                 .catch(err => {
                     throw new ServerError(err.message, { code: 500 })
@@ -992,6 +997,7 @@ const deleteComment = async (_id) => {
 
 }
 
+// Should delete Nitification as well when deleting comment.
 server.post('/delete-comment', verifyJWT, async (req, res) => {
 
     try {
@@ -1076,6 +1082,95 @@ server.post('/change-password', verifyJWT, async (req, res) => {
     } catch (err) {
         return res.status(err.code || 500).json({ error: err.message });
     }
+})
+
+server.get('/new-notification', verifyJWT, (req, res) => {
+
+    const user_id = req.user
+    Notification.exists({ notification_for: user_id, seen: false, user: { $ne: user_id } })
+        .then(result => {
+
+            if (result) {
+                return res.status(200).json({ new_notification_available: true })
+            }
+            else {
+                return res.status(200).json({ new_notification_available: false })
+            }
+
+        })
+        .catch(err => {
+            return res.status(500).json({ error: err })
+        })
+
+})
+
+server.post('/notifications', verifyJWT, async (req, res) => {
+
+    const user_id = req.user
+    const { page, filter, deletedDocCount } = req.body
+
+    const maxLimit = 10
+    const findQuery = { notification_for: user_id, user: { $ne: user_id } }
+    const skipDoc = (page - 1) * 10
+
+    if (filter !== 'all') {
+        findQuery.type = filter
+    }
+
+    if (deletedDocCount) {
+        skipDoc -= deletedDocCount
+    }
+
+    try {
+
+        const result = await Notification.find(findQuery).skip(skipDoc).limit(maxLimit)
+            .populate("blog", "title blog_id")
+            .populate("user", "personal_info.fullname personal_info.username personal_info.profile_img")
+            .populate("comment", "comment")
+            .populate("replied_on_comment", "comment")
+            .populate("reply", "comment")
+            .sort({ createdAt: -1 })
+            .select("createdAt type seen reply")
+
+        if (result) {
+            return res.status(200).json({ result, total: result.length })
+        }
+        else {
+            return res.status(500).json({ error: 'Error fetching data.' })
+        }
+
+    }
+    catch (err) {
+        return res.status(500).json({ error: err.message })
+    }
+
+})
+
+server.post('/all-notification-count', verifyJWT,async (req, res) => {
+
+    const user_id = req.user
+    const { filter } = req.body
+
+    const findQuery = { notification_for: user_id, user: { $ne: user_id } }
+
+    if (filter !== 'all') {
+        findQuery.type = filter
+    }
+
+    try {
+        const result = await Notification.count(findQuery)
+
+        if (result) {
+            return res.status(200).json({ totalDocs: result })
+        }
+        else {
+            return res.status(500).json({ error: 'Error while fetching data.' })
+        }
+    }
+    catch (err) {
+        return res.status(500).json({ error: err.message  })
+    }
+
 })
 
 server.listen(PORT, () => {

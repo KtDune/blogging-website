@@ -4,7 +4,7 @@ import { Navigate, NavLink, Outlet } from "react-router-dom"
 
 const SideNavbar = () => {
 
-    const { userAuth: { access_token } } = useContext(UserContext)
+    const { userAuth: { access_token, new_notification_available } } = useContext(UserContext)
 
     const curPath = location.pathname.split('/')[2]
 
@@ -61,10 +61,15 @@ const SideNavbar = () => {
                                 Blogs
                             </NavLink>
                             <NavLink to='/dashboard/notification' onClick={(e) => setPage(e.target.innerText)} className="sidebar-link">
+                                <div className="relative">
                                 <i className="fi fi-rr-bell"></i>
+                                {
+                                    new_notification_available && <span className="bg-red w-2 h-2 rounded-full absolute z-10 top-0 right-0"></span>
+                                }
+                                </div>
                                 Notification
                             </NavLink>
-                            <NavLink to='/dashboard/editor' onClick={(e) => setPage(e.target.innerText)} className="sidebar-link">
+                            <NavLink to='/editor' onClick={(e) => setPage(e.target.innerText)} className="sidebar-link">
                                 <i className="fi fi-rr-edit"></i>
                                 Write
                             </NavLink>
