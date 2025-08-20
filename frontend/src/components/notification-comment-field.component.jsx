@@ -25,11 +25,11 @@ const NotificationCommentField = ({ blog_id, blog_author, index = undefined, rep
 
             const { data } = await axios.post(
                 `${import.meta.env.VITE_SERVER_DOMAIN}/add-comment`,
-                { _id: blog_id, comment, blog_author: user_id, replying_to, notification_id  },
+                { _id: blog_id, comment, blog_author: user_id, replying_to, notification_id },
                 { headers: { 'Authorization': `Bearer ${access_token}` } }
             )
 
-            const newObj = { ...notification_data.result[index], reply: { _id: data.id, comment } }
+            const newObj = { ...notification_data.result[index], comment: { _id: data._id, comment: notification_data.result[index].comment.comment }, reply: { _id: data._id, comment } }
             setNotification(prev => {
                 const updated = prev.result
                 updated.splice(index, 1, newObj)

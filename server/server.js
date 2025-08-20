@@ -979,7 +979,7 @@ const deleteComment = async (_id) => {
                     throw new ServerError(err.message, { code: 500 })
                 })
 
-            await Notification.findOneAndDelete({ reply: _id })
+            await Notification.findOneAndUpdate({ reply: _id }, { $unset: { reply: 1 } })
                 .then(noti => { })
                 .catch(err => {
                     throw new ServerError(err.message, { code: 500 })
@@ -997,7 +997,7 @@ const deleteComment = async (_id) => {
 
 }
 
-// Should delete Nitification as well when deleting comment.
+// DONE: Deleting reply will delete its parent Notification as well. Fix this issue.
 server.post('/delete-comment', verifyJWT, async (req, res) => {
 
     try {
@@ -1084,10 +1084,10 @@ server.post('/change-password', verifyJWT, async (req, res) => {
     }
 })
 
-server.get('/new-notification', verifyJWT, (req, res) => {
+server.get('/new-notification', verifyJWT, async (req, res) => {
 
     const user_id = req.user
-    Notification.exists({ notification_for: user_id, seen: false, user: { $ne: user_id } })
+    await Notification.exists({ notification_for: user_id, seen: false, user: { $ne: user_id } })
         .then(result => {
 
             if (result) {
@@ -1109,9 +1109,22 @@ server.post('/notifications', verifyJWT, async (req, res) => {
     const user_id = req.user
     const { page, filter, deletedDocCount } = req.body
 
-    const maxLimit = 10
+    const allowedFilters = ['all', 'like', 'comment', 'reply']
+
+    if (
+        !is_number(page) 
+        || page < 1
+        || typeof filter !== 'string'
+        || !allowedFilters.includes(filter)
+        || !is_number(deletedDocCount)
+
+    ) {
+        return res.status(400).json({ error: 'Please provide a valid value.' })
+    }
+
+    const maxLimit = 5
     const findQuery = { notification_for: user_id, user: { $ne: user_id } }
-    const skipDoc = (page - 1) * 10
+    let skipDoc = (page - 1) * 5
 
     if (filter !== 'all') {
         findQuery.type = filter
@@ -1133,7 +1146,23 @@ server.post('/notifications', verifyJWT, async (req, res) => {
             .select("createdAt type seen reply")
 
         if (result) {
-            return res.status(200).json({ result, total: result.length })
+
+            await Notification.updateMany(findQuery, { seen: true }).skip(skipDoc)
+
+            const findNotiCountQuery = { notification_for: user_id, user: { $ne: user_id } }
+
+            if (filter !== 'all') {
+                findNotiCountQuery.type = filter
+            }
+
+            const notificationCount = await Notification.count(findNotiCountQuery)
+
+            if (result) {
+                return res.status(200).json({ result, total: notificationCount })
+            }
+            else {
+                return res.status(500).json({ error: 'Error while fetching data.' })
+            }
         }
         else {
             return res.status(500).json({ error: 'Error fetching data.' })
@@ -1142,33 +1171,6 @@ server.post('/notifications', verifyJWT, async (req, res) => {
     }
     catch (err) {
         return res.status(500).json({ error: err.message })
-    }
-
-})
-
-server.post('/all-notification-count', verifyJWT,async (req, res) => {
-
-    const user_id = req.user
-    const { filter } = req.body
-
-    const findQuery = { notification_for: user_id, user: { $ne: user_id } }
-
-    if (filter !== 'all') {
-        findQuery.type = filter
-    }
-
-    try {
-        const result = await Notification.count(findQuery)
-
-        if (result) {
-            return res.status(200).json({ totalDocs: result })
-        }
-        else {
-            return res.status(500).json({ error: 'Error while fetching data.' })
-        }
-    }
-    catch (err) {
-        return res.status(500).json({ error: err.message  })
     }
 
 })

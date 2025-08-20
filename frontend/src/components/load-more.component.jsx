@@ -3,6 +3,7 @@ const LoadMoreDataBtn = ({ state, setCurPage, curPage }) => {
   
     // Guard clause: render nothing if state is null or total is 0
     // TODO: This component should not accept all items, rewrite it to only accept total amount of data left.
+    // TODO: maxLimit should be passed as prop instead of hardcoded to 5.
     if (!state || state.total === 0) {
       return null;
     }

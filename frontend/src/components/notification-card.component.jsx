@@ -4,8 +4,9 @@ import { useContext, useState } from "react"
 import NotificationCommentField from "./notification-comment-field.component"
 import { UserContext } from "../App"
 import axios from "axios"
+import { fetchNotifications } from "./tools.component"
 
-const NotificationCard = ({ data, index, notification, setNotification }) => {
+const NotificationCard = ({ data, index, notification, setNotification, filter, page }) => {
 
     const {
         _id: notification_id,
@@ -17,6 +18,7 @@ const NotificationCard = ({ data, index, notification, setNotification }) => {
         comment,
         blog: { _id, blog_id, title },
         createdAt,
+        seen,
     } = data
 
     const { userAuth: { access_token, username: author_username, profile_img: author_profile_img } } = useContext(UserContext)
@@ -27,38 +29,31 @@ const NotificationCard = ({ data, index, notification, setNotification }) => {
         setIsReplying(prev => !prev)
     }
 
-    const handleDelete = (comment_id, type, target) => {
-        target.setAttribute('disabled', true)
+    // TODO: If there is only one item in the current page, deleting it will cause the current page to show no data. Need to have a condition or sth to navigate to previuos page.
+    const handleDelete = async (comment_id, type, target) => {
+        try {
+            target.setAttribute('disabled', true)
 
-        axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/delete-comment`,
-            { _id: comment_id },
-            { headers: { Authorization: `Bearer ${access_token}` } },
-        )
-            .then(() => {
-                target.removeAttribute('disable')
-                setNotification(prev => {
-                    const updated = prev.result
+            await axios.post(
+                `${import.meta.env.VITE_SERVER_DOMAIN}/delete-comment`,
+                { _id: comment_id },
+                { headers: { Authorization: `Bearer ${access_token}` } }
+            )
 
-                    if (type === 'comment') {
-                        updated.splice(index, 1)
-                    }
-                    else {
-                        delete updated[index].reply
-                    }
+            target.removeAttribute('disabled')
 
-                    return {
-                        result: updated,
-                        total: prev.total - 1,
-                        deletedDocCount: prev?.deletedDocCount ? prev.deletedDocCount + 1 : 1
-                    }
-                })
-            })
-            .catch(err => console.error(err))
+            const data = await fetchNotifications({ page, filter, access_token })
+            setNotification(data)
+        } catch (err) {
+            console.error(err)
+            target.removeAttribute('disabled')
+        }
     }
+
 
     return (
         <>
-            <div className="p-6 border-b border-grey border-l-black">
+            <div className={`p-6 border-b border-grey border-l-black ${!seen ? 'border-l-2' : ''}`}>
 
                 <div className="flex gap-5 mb-3">
                     <img src={profile_img} className="w-14 h-14 flex-none rounded-full" />

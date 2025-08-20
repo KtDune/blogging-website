@@ -6,36 +6,32 @@ import AnimationWrapper from "../common/page-animation"
 import NotificationCard from "../components/notification-card.component"
 import NodataMessage from "../components/nodata.component"
 import LoadMoreDataBtn from "../components/load-more.component"
+import { fetchNotifications } from "../components/tools.component"
 
 const NotificationPage = () => {
 
-    const { userAuth: { access_token } } = useContext(UserContext)
+    const { userAuth: { access_token, new_notification_available }, setUserAuth } = useContext(UserContext)
     const [filter, setFilter] = useState('all')
     const [notification, setNotification] = useState(null)
     const [page, setPage] = useState(1)
 
     useEffect(() => {
         if (access_token) {
-            fetchNotifications(1, 'all') // fetch all data on initial load
+            const handleNotification = async () => {
+                const result = await fetchNotifications({ page, filter, access_token }) // fetch all data on initial load
+        
+                if (new_notification_available) {
+                    setUserAuth(prev => ({ ...prev, new_notification_available: false }))
+                }
+
+                setNotification(result)
+            }
+
+            handleNotification()
         }
-    }, [access_token])
+    }, [access_token, filter, page])
 
     const filters = ['all', 'like', 'comment', 'reply']
-
-    const fetchNotifications = ({ page, deletedDocCount = 0 }) => {
-        axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/notifications`,
-            { page, filter, deletedDocCount },
-            {
-                headers: {
-                    Authorization: `Bearer ${access_token}`
-                }
-            })
-            .then(async ({ data }) => {
-
-                setNotification(data)
-            })
-            .catch(({ response: { data: { error } } }) => console.error(error))
-    }
 
     const handleFilter = (e) => {
         const btn = e.target
@@ -59,7 +55,13 @@ const NotificationPage = () => {
                     : notification?.result?.length > 0
                         ? notification?.result?.map((item, i) => (
                             <AnimationWrapper key={i} transition={{ delay: i * 0.08 }}>
-                                <NotificationCard data={item} index={i} notification={notification} setNotification={setNotification} />
+                                <NotificationCard
+                                    data={item} index={i}
+                                    notification={notification}
+                                    setNotification={setNotification}
+                                    filter={filter}
+                                    page={page}
+                                />
                             </AnimationWrapper>
                         ))
                         : <NodataMessage message="Nothing available" />

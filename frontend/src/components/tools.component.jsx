@@ -76,7 +76,7 @@ export const deleteImage = async (url, access_token) => {
 
 // Extend the image tool to enhance the image removal lifecycle
 class CustomImage extends Image {
-    constructor(editorConfig){
+    constructor(editorConfig) {
         super(editorConfig)
 
         this.access_token = editorConfig?.config?.access_token
@@ -161,5 +161,23 @@ export const fetchComments = async ({ skip = 0, blog_id, replyingTo = undefined 
     } catch (error) {
         console.error(error.message)
         return [] // or null or throw error again depending on your design
+    }
+}
+
+export const fetchNotifications = async ({ page, filter, access_token, deletedDocCount = 0 }) => {
+    try {
+        const { data } = await axios.post(
+            `${import.meta.env.VITE_SERVER_DOMAIN}/notifications`,
+            { page, filter, deletedDocCount },
+            {
+                headers: {
+                    Authorization: `Bearer ${access_token}`
+                }
+            }
+        )
+        return data
+    } catch (error) {
+        console.error(error.response?.data?.error || error.message)
+        return []
     }
 }
