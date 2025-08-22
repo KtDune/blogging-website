@@ -181,3 +181,21 @@ export const fetchNotifications = async ({ page, filter, access_token, deletedDo
         return []
     }
 }
+
+export const fetchBlogInManage = async ({ page, query, draft, access_token }) => {
+
+    try {
+
+        const { data } = await axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/user-written-blogs`,
+            { page, query, draft },
+            { headers: { Authorization: `Bearer ${access_token}` } })
+
+        return data
+
+    }
+    catch (error) {
+        console.econsole.error(error.response?.data?.error || error.message)
+        return []
+    }
+
+}

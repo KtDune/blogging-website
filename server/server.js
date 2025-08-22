@@ -1112,7 +1112,7 @@ server.post('/notifications', verifyJWT, async (req, res) => {
     const allowedFilters = ['all', 'like', 'comment', 'reply']
 
     if (
-        !is_number(page) 
+        !is_number(page)
         || page < 1
         || typeof filter !== 'string'
         || !allowedFilters.includes(filter)
@@ -1166,6 +1166,70 @@ server.post('/notifications', verifyJWT, async (req, res) => {
         }
         else {
             return res.status(500).json({ error: 'Error fetching data.' })
+        }
+
+    }
+    catch (err) {
+        return res.status(500).json({ error: err.message })
+    }
+
+})
+
+// TODO: session should only be accessed via https
+server.post('/user-written-blogs', verifyJWT, async (req, res) => {
+
+    const user_id = req.user
+    const { page, draft, query, deletedDocCount } = req.body
+
+    const maxLimit = 5
+    let skipDoc = (page - 1) * maxLimit
+
+    if (deletedDocCount) {
+        skipDoc -= deletedDocCount
+    }
+
+
+    try {
+
+        const result = await Blog.find({ author: user_id, draft, title: new RegExp(query, 'i') })
+            .skip(skipDoc)
+            .limit(maxLimit)
+            .sort({ publishedAt: -1 })
+            .select("title banner publishedAt blog_id activity des draft -_id")
+
+        const totalBlogs = await Blog.count({ author: user_id, draft, title: new RegExp(query, 'i') })
+
+        return res.status(200).json({ blogs: result, total: totalBlogs })
+
+    }
+    catch (err) {
+        return res.status(500).json({ error: err.message })
+    }
+
+})
+
+// TODO: Delete all images inside this blog when deleting.
+server.post('/delete-blog', verifyJWT, async (req, res) => {
+
+    const user_id = req.user
+    const { blog_id } = req.body
+
+    try {
+
+        const result = await Blog.findOneAndDelete({ blog_id })
+
+        if (result) {
+
+            await Notification.deleteMany({ blog: result._id })
+            await Comment.deleteMany({ blog_id: result._id })
+
+            await User.findOneAndUpdate({ _id: user_id }, { $pull: { blog: result._id } }, { $inc: { "account_info.total_posts": -1 } })
+
+            return res.status(200).json({ result: true })
+
+        }
+        else {
+            return res.status(500).json({ result: false })
         }
 
     }
