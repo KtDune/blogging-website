@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 
-const InPageNavigation = ({ routes, defaultIActiveIndex = 0, setNavPage, defaultHidden = [], children }) => {
+const InPageNavigation = ({ routes, defaultIActiveIndex = 0, setNavPage, defaultHidden = [], children, changeOnResize=true }) => {
     const [inPageNavIndex, setInPageNavIndex] = useState(defaultIActiveIndex)
     const activeTabLineRef = useRef()
     const activeTabRef = useRef()
@@ -8,6 +8,23 @@ const InPageNavigation = ({ routes, defaultIActiveIndex = 0, setNavPage, default
     useEffect(() => {
         changePageState(activeTabRef.current, defaultIActiveIndex)
     }, [])
+
+    useEffect(() => {
+        const handleResize = () => {
+            if (changeOnResize && window.innerWidth >= 768) {
+                if (activeTabRef.current) {
+                    changePageState(activeTabRef.current, 0)
+                }
+            }
+        }
+
+        // Run once on mount
+        handleResize()
+
+        window.addEventListener("resize", handleResize)
+        return () => window.removeEventListener("resize", handleResize)
+    }, [])
+
 
     const changePageState = (btn, i) => {
         const { offsetWidth, offsetLeft } = btn

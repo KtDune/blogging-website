@@ -3,7 +3,7 @@ import logo from "../imgs/logo.png"
 import AnimationWrapper from "../common/page-animation"
 import { Toaster, toast } from "react-hot-toast"
 import { uploadImage } from "../common/firebase"
-import { useContext, useEffect, useRef } from "react"
+import { useContext, useEffect, useRef, useState } from "react"
 import { EditorContext } from "../pages/editor.pages"
 import defaultBanner from "../imgs/blog banner.png"
 import EditorJS from "@editorjs/editorjs"
@@ -14,7 +14,9 @@ import Loader from "./loader.component"
 import DOMPurify from 'dompurify'
 
 // DONE: Implement DOMPurify to sanitize the inputs
-// TODO: The '+' button will be hidden under certain screen width
+// PARK: The '+' button will be hidden under certain screen width
+// PARK: Frontend should show whats wrong with the image uploaded
+// PARK: Qhen showing the preview page should redirect user to the top of the page
 const BlogEditor = () => {
     const context = useContext(EditorContext)
     const authContext = useContext(UserContext)
@@ -30,6 +32,17 @@ const BlogEditor = () => {
     const navigate = useNavigate()
 
     useEffect(() => {
+        const {
+            blog: { title, banner, content, tags, des },
+            editorState,
+            setEditorState,
+            setBlog,
+            textEditor,
+            setTextEditor,
+        } = context
+    }, [context])
+
+    useEffect(() => {
         if (access_token && !textEditor.isReady) {
             setTextEditor(new EditorJS({
                 holder: "textEditor",
@@ -38,15 +51,15 @@ const BlogEditor = () => {
                 placeholder: 'Start your story here...',
             }))
         }
-    }, [access_token])
 
-    const {
-        blog: { title, banner, content, tags, des },
-        setEditorState,
-        setBlog,
-        textEditor,
-        setTextEditor,
-    } = context
+        return () => {
+            setTextEditor(prev => {
+                prev.destroy()
+
+                return { isReady: false }
+            })
+        }
+    }, [access_token, editorState])
 
     const handlePublishEvent = (e) => {
         if (!banner) {
@@ -236,7 +249,7 @@ const BlogEditor = () => {
                                 <label htmlFor="uploadBanner">
                                     <img
                                         src={banner}
-                                        className="z-20" // TODO: Fit the image to its parent container.
+                                        className="z-20 object-contain" // DONE: Fit the image to its parent container.
                                         onError={handleError}
                                     />
                                     <input

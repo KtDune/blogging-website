@@ -95,7 +95,7 @@ const BlogPage = () => {
                             setTotalParentCommentLoaded={setTotalParentCommentLoaded}
                         />
 
-                        <img src={banner} className="aspect-video" />
+                        <img src={banner} className="aspect-video object-contain" />
                         <div className="mt-12">
                             <h2>{title}</h2>
 

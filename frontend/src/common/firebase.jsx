@@ -2,7 +2,6 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
-import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage"
 // https://firebase.google.com/docs/web/setup#available-libraries
 
 import axios from "axios"
@@ -20,7 +19,6 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-// TODO: Change signInWithPopup to signInWithRedirect, see if it would work or not
 const app = initializeApp(firebaseConfig);
 const provider = new GoogleAuthProvider()
 

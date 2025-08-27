@@ -76,6 +76,7 @@ export const deleteImage = async (url, access_token) => {
 
 // Extend the image tool to enhance the image removal lifecycle
 class CustomImage extends Image {
+
     constructor(editorConfig) {
         super(editorConfig)
 
@@ -86,6 +87,28 @@ class CustomImage extends Image {
         const { file: { url } } = this._data
         deleteImage(url, this.access_token);
     }
+
+    render() {
+        const wrapper = super.render()
+
+        wrapper.querySelector('.image-tool__image').classList.add('aspect-video')
+
+        const img = wrapper.querySelector('img')
+        if (img) {
+            wrapper.querySelector('img').classList.add('object-contain')
+        }
+
+        const observer = new MutationObserver(() => {
+            const img = wrapper.querySelector('img');
+            if (img) {
+                img.classList.add('object-contain');
+            }
+        });
+        observer.observe(wrapper, { childList: true, subtree: true });
+
+        return wrapper;
+    }
+
 }
 
 // toolbarConfig.js

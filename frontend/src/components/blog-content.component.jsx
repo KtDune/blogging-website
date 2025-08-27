@@ -23,7 +23,7 @@ const BlogContent = ({ block }) => {
             {
                 type === 'image'
                     ? <div>
-                        <img src={data?.file?.url} />
+                        <img src={data?.file?.url} className="aspect-video object-contain" />
                         {
                             data?.caption
                                 ? <p className="w-full text-center my-3 md:mb-12 text-base text-dark-grey">{parseHTMLString(data?.caption)}</p>

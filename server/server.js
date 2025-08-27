@@ -12,13 +12,17 @@ import is_number from 'is_number'
 import multer from 'multer'
 import { fileTypeFromBuffer } from 'file-type'
 import { createRequire } from 'module'
+import { rateLimit } from 'express-rate-limit';
+import { slowDown } from 'express-slow-down'
 
 import User from './Schema/User.js'
 import Blog from './Schema/Blog.js'
 import Notification from './Schema/Notification.js'
 import Comment from './Schema/Comment.js'
+import RefreshToken from './Schema/Refresh.js'
 import { ServerError } from './ServerError.js'
-import { randomUUID } from 'crypto';
+import crypto, { randomUUID } from 'crypto';
+import cookieParser from 'cookie-parser';
 
 const server = express()
 const require = createRequire(import.meta.url)
@@ -29,12 +33,33 @@ const PORT = 8080
 const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/; // regex for email
 const passwordRegex = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{6,20}$/; // regex for password
 
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
+    standardHeaders: 'draft-8',
+    message: 'Too many requests'
+})
+
+const slower = slowDown({
+    windowMs: 60 * 1000, // 15 minutes
+    delayAfter: 10, // Allow 10 request per 1 minute
+    delayMs: (hits) => hits * 100, // Add 100 ms of delay to every request after the 5th one.
+})
+
 const MAX_SIZE = 3 * 1024 * 1024; // 3MB
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp']
 const ALLOWED_EXTENSIONS = ['jpeg', 'png', 'jpg', 'webp']
 
+server.use(cors({
+    origin: `${process.env.FRONTEND_DOMAIN}`,  // explicitly allow your frontend
+    credentials: true,                // allow cookies/auth headers
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+}))
 server.use(express.json())
-server.use(cors())
+server.use(limiter)
+server.use(slower)
+server.use(cookieParser())
 
 admin.initializeApp({
     credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_ADMIN_JSON)),
@@ -95,7 +120,7 @@ const generateUsername = async (email) => {
 }
 
 const formatResult = (user) => {
-    const access_token = jwt.sign({ id: user._id }, process.env.SECRET_ACCESS_KEY)
+    const access_token = jwt.sign({ id: user._id }, process.env.SECRET_ACCESS_KEY, { expiresIn: '10m' })
 
     return {
         access_token,
@@ -103,6 +128,10 @@ const formatResult = (user) => {
         username: user.personal_info.username,
         fullname: user.personal_info.fullname,
     }
+}
+
+const generateRefreshToken = (user) => {
+    return jwt.sign({ id: user._id }, process.env.SECRET_REFRESH_KEY, { expiresIn: '7d' })
 }
 
 const uploadToFirebaseBucket = async (buffer, contentType = "image/webp") => {
@@ -276,7 +305,7 @@ server.post('/signup', async (req, res) => {
             },
         });
 
-        const savedUser = await user.save();
+        const savedUser = await user.save()
         return res.status(200).json(formatResult(savedUser));
 
     } catch (err) {
@@ -323,6 +352,20 @@ server.post('/signin', async (req, res) => {
         if (!passwordMatch) {
             return res.status(401).json({ error: 'Incorrect password' });
         }
+
+        const refreshToken = crypto.randomBytes(64).toString('hex')
+        await RefreshToken.create({
+            token: refreshToken,
+            userId: user._id,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        })
+
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: "None",
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        })
 
         return res.status(200).json(formatResult(user));
 
@@ -380,6 +423,85 @@ server.post('/google-auth', async (req, res) => {
         // Firebase throws with a proper message on invalid/expired token
         console.error('Unexpected error during Google auth:', err);
         return res.status(500).json({ error: 'Internal Server Error' });
+    }
+})
+
+server.post('/logout', verifyJWT, async (req, res) => {
+
+    try {
+
+        await RefreshToken.deleteOne({ token: req.cookies.refreshToken })
+        res.clearCookie("refreshToken", {
+            httpOnly: true,
+            secure: true,
+            sameSite: "None",
+        });
+        
+
+        return res.status(200).json({ result: true })
+
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'Internal server error.' })
+    }
+
+})
+
+server.post('/refresh', async (req, res) => {
+    try {
+        const refreshToken = req.cookies?.refreshToken; // token stored in httpOnly cookie
+
+        if (!refreshToken) {
+            return res.status(400).json({ error: 'Refresh token missing', access_token: null });
+        }
+
+        // Check if refresh token exists in DB
+        const storedToken = await RefreshToken.findOne({ token: refreshToken });
+
+        if (!storedToken) {
+            return res.status(403).json({ error: 'Invalid refresh token', access_token: null });
+        }
+
+        // Check if refresh token expired
+        if (storedToken.expiresAt < new Date()) {
+            await RefreshToken.deleteOne({ token: refreshToken }); // cleanup
+            return res.status(403).json({ error: 'Refresh token expired', access_token: null });
+        }
+
+        // Find the user linked to this token
+        const user = await User.findById(storedToken.userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found', access_token: null });
+        }
+
+        // ✅ Generate new access token
+        const newAccessToken = jwt.sign(
+            { id: user._id },
+            process.env.SECRET_ACCESS_KEY,
+            { expiresIn: '10m' }
+        );
+
+        // (Optional) Rotate refresh token → prevents token theft replay
+        const newRefreshToken = crypto.randomBytes(64).toString('hex');
+        storedToken.token = newRefreshToken;
+        storedToken.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        await storedToken.save();
+
+        // Set new refresh token in cookie
+        res.cookie("refreshToken", newRefreshToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: "None",
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+
+        return res.status(200).json({
+            access_token: newAccessToken,
+        });
+
+    } catch (err) {
+        console.error('Error refreshing token:', err);
+        return res.status(500).json({ error: 'Internal Server Error', access_token: null });
     }
 })
 
@@ -916,7 +1038,7 @@ server.post("/add-comment", verifyJWT, async (req, res) => {
 })
 
 
-// TODO: Perform rate limiting for all method to prevent DDoS
+// DONE: Perform rate limiting for all method to prevent DDoS
 server.post('/get-blog-comments', async (req, res) => {
     const { blog_id, skip = 0, replyingTo } = req.body;
     const maxLimit = 5
@@ -1014,7 +1136,7 @@ server.post('/delete-comment', verifyJWT, async (req, res) => {
                     return res.status(200).json({ status: 'Done' })
                 }
                 else {
-                    return res.status(401).json({ error: 'You cannot delete this comment.' })
+                    return res.status(403).json({ error: 'You cannot delete this comment.' })
                 }
             })
     }
@@ -1053,7 +1175,7 @@ server.post('/change-password', verifyJWT, async (req, res) => {
 
         // Block Google-authenticated users
         if (user.google_auth) {
-            return res.status(401).json({
+            return res.status(403).json({
                 error: 'You cannot reset password as you are logged in with Google.'
             });
         }
@@ -1175,7 +1297,6 @@ server.post('/notifications', verifyJWT, async (req, res) => {
 
 })
 
-// TODO: session should only be accessed via https
 server.post('/user-written-blogs', verifyJWT, async (req, res) => {
 
     const user_id = req.user
@@ -1208,7 +1329,8 @@ server.post('/user-written-blogs', verifyJWT, async (req, res) => {
 
 })
 
-// TODO: Delete all images inside this blog when deleting.
+// DONE: Delete all images inside this blog when deleting.
+// TODO: Implement refresh token / cookie storage and storing tokens in db.
 server.post('/delete-blog', verifyJWT, async (req, res) => {
 
     const user_id = req.user
@@ -1220,8 +1342,28 @@ server.post('/delete-blog', verifyJWT, async (req, res) => {
 
         if (result) {
 
-            await Notification.deleteMany({ blog: result._id })
-            await Comment.deleteMany({ blog_id: result._id })
+            const bannerImg = decodeURIComponent(`bannerImg/${result.banner.match(/\/bannerImg\/([^?]+)/)[1]}`)
+
+            const deleteBannerResult = await deleteFromBucket(bannerImg)
+
+            if (!deleteBannerResult) {
+                return res.status(400).json({ error: 'Failed to remove image.' })
+            }
+
+            const contentList = result.content[0].blocks
+
+            contentList.forEach(async (item) => {
+                if (item.type === 'image') {
+
+                    const imageUrl = decodeURIComponent(`bannerImg/${item.data.file.url.match(/\/bannerImg\/([^?]+)/)[1]}`)
+
+                    await deleteFromBucket(imageUrl)
+
+                }
+            })
+
+            const allDeletedNotification = await Notification.deleteMany({ blog: result._id })
+            const allDeletedComments = await Comment.deleteMany({ blog_id: result._id })
 
             await User.findOneAndUpdate({ _id: user_id }, { $pull: { blog: result._id } }, { $inc: { "account_info.total_posts": -1 } })
 

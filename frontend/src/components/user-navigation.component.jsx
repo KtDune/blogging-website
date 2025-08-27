@@ -3,12 +3,15 @@ import AnimationWrapper from "../common/page-animation"
 import { Link, useNavigate } from "react-router-dom"
 import { UserContext } from "../App"
 import { removeFromSession } from "../common/session"
+import axios from "axios"
 
 const UserNavigationPanel = () => {
-    const { userAuth: { username }, setUserAuth } = useContext(UserContext)
+    const { userAuth: { username, access_token }, setUserAuth } = useContext(UserContext)
     const navigate = useNavigate()
 
     const signOutUser = () => {
+        axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/logout`, {}, { headers: { Authorization: `Bearer ${access_token}` } })
+
         removeFromSession('user')
         setUserAuth({ access_token: null })
 

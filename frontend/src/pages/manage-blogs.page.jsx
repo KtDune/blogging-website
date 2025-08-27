@@ -10,7 +10,7 @@ import AnimationWrapper from "../common/page-animation"
 import ManageBlogCard from "../components/manage-blogcard.component"
 import LoadMoreDataBtn from "../components/load-more.component"
 
-// TODO: Change search on keydown to search on enter / click search icon.
+// DONE: Change search on keydown to search on enter / click search icon.
 const ManageBlogs = () => {
 
     const [blogs, setBlogs] = useState(null)
@@ -18,6 +18,7 @@ const ManageBlogs = () => {
     const [query, setQuery] = useState('')
     const [page, setPage] = useState(1)
     const [navPage, setNavPage] = useState('Published Blogs')
+    const [searchTrigger, setSearchTrigger] = useState(true)
     const { userAuth: { access_token } } = useContext(UserContext)
 
     useEffect(() => {
@@ -26,7 +27,7 @@ const ManageBlogs = () => {
 
     useEffect(() => {
 
-        const fetchComment = async () => {
+        const fetchContent = async () => {
             try {
 
                 if (navPage === 'Drafts') {
@@ -45,14 +46,16 @@ const ManageBlogs = () => {
             }
         }
 
-        if (access_token) {
-            fetchComment()
+        if (access_token && searchTrigger) {
+            fetchContent()
+            setSearchTrigger(false)
         }
 
-    }, [access_token, page, query, navPage])
+    }, [access_token, page, navPage, searchTrigger])
 
     const handleChange = (e) => {
         if (e.target.value.length === 0) {
+            setSearchTrigger(true)
             setQuery('')
             setBlogs(null)
             setDraft(null)
@@ -61,12 +64,12 @@ const ManageBlogs = () => {
 
     const handleSearchFunction = (e) => {
         const searchQuery = e.target.value
-
         setQuery(searchQuery)
 
         if (e.keyCode === 13 && searchQuery.length) {
             setBlogs(null)
             setDraft(null)
+            setSearchTrigger(true)
         }
     }
 

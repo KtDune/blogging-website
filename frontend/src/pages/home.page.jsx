@@ -26,6 +26,9 @@ const HomePage = () => {
     }, [curPage])
 
     const fetchLatestBlog = (page = 1) => {
+
+        setBlogs(null)
+
         axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/latest-blog`, {
             page
         })
@@ -66,7 +69,7 @@ const HomePage = () => {
                                                 </AnimationWrapper>
                                             ))
                             }
-                            { navPage === 'Home' && <LoadMoreDataBtn state={blogs} setCurPage={setCurPage} curPage={curPage} /> }
+                            {navPage === 'Home' && <LoadMoreDataBtn state={blogs} setCurPage={setCurPage} curPage={curPage} />}
                         </>
 
                     </InPageNavigation>

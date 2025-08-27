@@ -29,7 +29,7 @@ const WeatherComponent = () => {
     }, [weather])
 
     const getWeather = () => {
-        axios.get('https://api.data.gov.my/weather/forecast?contains=Tn139@location__location_id')
+        axios.get('https://api.data.gov.my/weather/forecast?contains=Tn139@location__location_id', { withCredentials: false })
             .then(({ data }) => {
                 const weatherToday = data[data.length - 1]
                 const currentTime = getTime(new Date())

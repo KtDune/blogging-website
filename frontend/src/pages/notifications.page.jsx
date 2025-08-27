@@ -17,6 +17,8 @@ const NotificationPage = () => {
 
     useEffect(() => {
         if (access_token) {
+            setNotification(null)
+
             const handleNotification = async () => {
                 const result = await fetchNotifications({ page, filter, access_token }) // fetch all data on initial load
         

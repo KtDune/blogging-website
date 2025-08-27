@@ -23,6 +23,8 @@ const SearchPage = () => {
     }, [query, curPage])
 
     const searchBlog = (page = 1) => {
+        setBlogs(null)
+
         axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/search-blog`, {
             page,
             query,
@@ -34,6 +36,8 @@ const SearchPage = () => {
     }
 
     const fetchUser = () => {
+        setUsers(null)
+
         axios.post(`${import.meta.env.VITE_SERVER_DOMAIN}/search-user`, { query })
             .then(({ data }) => {
                 setUsers(data)
