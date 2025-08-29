@@ -44,6 +44,7 @@ export const authWithGoogle = async () => {
 // PARTIAL_DONE: Implement auth checking before user upload images.
 // DONE: Compress image before uploading
 // TODO: Add chinese translation for words
+// TOFO: Hide irrelavant information inside network tab
 // DONE: Set up firebase storage securely so Tea incident wont happen on my project again.
 export const uploadImage = async (image, access_token) => {
     try {
