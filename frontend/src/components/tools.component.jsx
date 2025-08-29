@@ -14,7 +14,7 @@ import DOMPurify from "dompurify"
 import { UserContext } from "../App"
 
 // DONE: Set maximum upload file size in firebase
-// TODO: Fix vulnerabilities inside https://github.com/KtDune/blogging-website/security/dependabot, fix high risk issue would do.
+// DONE: Fix vulnerabilities inside https://github.com/KtDune/blogging-website/security/dependabot, fix high risk issue would do.
 const uploadByUrl = (e) => {
     let link = new Promise((resolve, reject) => {
         try {

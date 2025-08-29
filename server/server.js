@@ -42,7 +42,7 @@ const limiter = rateLimit({
 
 const slower = slowDown({
     windowMs: 60 * 1000, // 15 minutes
-    delayAfter: 10, // Allow 10 request per 1 minute
+    delayAfter: 30, // Allow 10 request per 1 minute
     delayMs: (hits) => hits * 100, // Add 100 ms of delay to every request after the 5th one.
 })
 
@@ -451,9 +451,16 @@ server.post('/google-auth', async (req, res) => {
     }
 })
 
-server.post('/logout', verifyJWT, async (req, res) => {
+server.post('/logout', async (req, res) => {
 
     try {
+
+        const authHeader = req.headers['authorization']
+        const token = authHeader && authHeader.split(' ')[1]
+
+        if (!token) {
+            return res.status(400).json({ error: 'Already logged out.' })
+        }
 
         await RefreshToken.deleteOne({ token: req.cookies.refreshToken })
         res.clearCookie("refreshToken", {
