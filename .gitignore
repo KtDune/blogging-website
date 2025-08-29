@@ -1,7 +1,10 @@
 .env
 
 node_modules/*
+frontend/node_modules/*
+server/node_modules/*
 
 tanker.json
 
 request.rest
+node_modules
