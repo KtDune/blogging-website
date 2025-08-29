@@ -1,4 +1,4 @@
-import { Route, Routes, useNavigate } from "react-router-dom";
+import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import Navbar from "./components/navbar.component";
 import UserAuthForm from "./pages/userAuthForm.page";
 import { createContext, useEffect, useState } from "react";
@@ -23,42 +23,67 @@ export const UserContext = createContext({})
 const App = () => {
     const [userAuth, setUserAuth] = useState({})
     const navigate = useNavigate()
+    const location = useLocation()
 
     useEffect(() => {
-        let userSession = lookInSession('user')
-        userSession ? setUserAuth(JSON.parse(userSession)) : setUserAuth({ access_token: null })
+        const initAuth = async () => {
+            let userSession = lookInSession('user')
+
+            if (userSession) {
+                setUserAuth(JSON.parse(userSession))
+            } else {
+                try {
+                    // Try to refresh using the refreshToken cookie
+                    const res = await axios.post(
+                        `${import.meta.env.VITE_SERVER_DOMAIN}/refresh`
+                    )
+                    const data = res.data
+
+                    if (data) {
+                        setUserAuth(data)
+                    } else {
+                        setUserAuth({ access_token: null })
+                    }
+                } catch (err) {
+                    setUserAuth({ access_token: null })
+                    console.error("No refresh token available or expired")
+                }
+            }
+        }
+
+        initAuth()
     }, [])
 
     useEffect(() => {
         // 🔥 Add interceptor here so setUserAuth & navigate are in scope
-        const interceptor = axios.interceptors.response.use(
+        axios.interceptors.response.use(
             (response) => response,
             async (error) => {
                 const originalRequest = error.config
 
                 if (error.response?.status === 401 && !originalRequest._retry) {
                     originalRequest._retry = true
+
                     try {
                         const res = await axios.post(
                             `${import.meta.env.VITE_SERVER_DOMAIN}/refresh`
                         )
-                        const newAccessToken = res.data?.access_token
 
-                        if (newAccessToken) {
-                            setUserAuth(prev => ({
-                                ...prev,
-                                access_token: newAccessToken
-                            }))
+                        const data = res?.data
+
+                        if (data) {
+                            setUserAuth(data)
 
 
-                            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
+                            originalRequest.headers.Authorization = `Bearer ${data.access_token}`
                             return axios(originalRequest) // retry request
                         }
                         else {
                             navigate("/")
-                            console.log('No refresh token lol')
+                            console.error(data)
                         }
                     } catch (refreshError) {
+                        console.error(refreshError)
                         navigate("/") // refresh token failed → logout
                         return Promise.reject(refreshError)
                     }
@@ -66,9 +91,7 @@ const App = () => {
                 return Promise.reject(error)
             }
         )
-
-        return () => axios.interceptors.response.eject(interceptor) // cleanup on unmount
-    }, [setUserAuth, navigate])
+    }, [setUserAuth, navigate, location])
 
     return (
         <UserContext.Provider value={{ userAuth, setUserAuth }}>

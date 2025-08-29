@@ -26,19 +26,18 @@ const ManageBlogs = () => {
     }, [navPage])
 
     useEffect(() => {
-
         const fetchContent = async () => {
             try {
-
                 if (navPage === 'Drafts') {
                     const result = await fetchBlogInManage({ page, query, draft: true, access_token })
-
-                    setDraft(result)
-                }
-                else {
+                    // append for load more
+                    setDraft(prev => page === 1 ? result : {
+                        ...result,
+                        blogs: [...(prev?.blogs || []), ...result.blogs]
+                    });
+                } else {
                     const result = await fetchBlogInManage({ page, query, draft: false, access_token })
-
-                    setBlogs(result)
+                    setBlogs(result);
                 }
             }
             catch (err) {
@@ -46,12 +45,16 @@ const ManageBlogs = () => {
             }
         }
 
-        if (access_token && searchTrigger) {
-            fetchContent()
-            setSearchTrigger(false)
+        // ✅ fetch when access_token is ready
+        if (access_token) {
+            if (searchTrigger || page >= 1) {
+                fetchContent()
+                setSearchTrigger(false) // reset only after a fetch triggered by search
+            }
         }
 
     }, [access_token, page, navPage, searchTrigger])
+
 
     const handleChange = (e) => {
         if (e.target.value.length === 0) {

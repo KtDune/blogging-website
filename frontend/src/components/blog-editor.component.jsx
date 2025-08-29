@@ -16,7 +16,9 @@ import DOMPurify from 'dompurify'
 // DONE: Implement DOMPurify to sanitize the inputs
 // PARK: The '+' button will be hidden under certain screen width
 // PARK: Frontend should show whats wrong with the image uploaded
-// PARK: Qhen showing the preview page should redirect user to the top of the page
+// PARK: When showing the preview page should redirect user to the top of the page
+// TODO: Prompt a dialog to ask user if they sure they want to leave after they edited the text area.
+// TODO: Implement safety url sanitizer, but since I added path it should be fine?
 const BlogEditor = () => {
     const context = useContext(EditorContext)
     const authContext = useContext(UserContext)
@@ -31,16 +33,14 @@ const BlogEditor = () => {
     const { userAuth: { access_token } } = authContext
     const navigate = useNavigate()
 
-    useEffect(() => {
-        const {
-            blog: { title, banner, content, tags, des },
-            editorState,
-            setEditorState,
-            setBlog,
-            textEditor,
-            setTextEditor,
-        } = context
-    }, [context])
+    const {
+        blog: { title, banner, content, tags, des },
+        editorState,
+        setEditorState,
+        setBlog,
+        textEditor,
+        setTextEditor,
+    } = context
 
     useEffect(() => {
         if (access_token && !textEditor.isReady) {
@@ -53,11 +53,9 @@ const BlogEditor = () => {
         }
 
         return () => {
-            setTextEditor(prev => {
-                prev.destroy()
-
-                return { isReady: false }
-            })
+            if (textEditor && textEditor.destroy) {
+                textEditor.destroy()
+            }
         }
     }, [access_token, editorState])
 

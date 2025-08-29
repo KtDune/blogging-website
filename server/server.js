@@ -14,6 +14,7 @@ import { fileTypeFromBuffer } from 'file-type'
 import { createRequire } from 'module'
 import { rateLimit } from 'express-rate-limit';
 import { slowDown } from 'express-slow-down'
+import { doubleCsrf } from 'csrf-csrf';
 
 import User from './Schema/User.js'
 import Blog from './Schema/Blog.js'
@@ -120,7 +121,7 @@ const generateUsername = async (email) => {
 }
 
 const formatResult = (user) => {
-    const access_token = jwt.sign({ id: user._id }, process.env.SECRET_ACCESS_KEY, { expiresIn: '10m' })
+    const access_token = jwt.sign({ id: user._id }, process.env.SECRET_ACCESS_KEY, { expiresIn: '15m' })
 
     return {
         access_token,
@@ -128,10 +129,6 @@ const formatResult = (user) => {
         username: user.personal_info.username,
         fullname: user.personal_info.fullname,
     }
-}
-
-const generateRefreshToken = (user) => {
-    return jwt.sign({ id: user._id }, process.env.SECRET_REFRESH_KEY, { expiresIn: '7d' })
 }
 
 const uploadToFirebaseBucket = async (buffer, contentType = "image/webp") => {
@@ -306,6 +303,21 @@ server.post('/signup', async (req, res) => {
         });
 
         const savedUser = await user.save()
+
+        const refreshToken = crypto.randomBytes(64).toString('hex')
+        await RefreshToken.create({
+            token: refreshToken,
+            userId: savedUser._id,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        })
+
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: "Lax",
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        })
+
         return res.status(200).json(formatResult(savedUser));
 
     } catch (err) {
@@ -350,7 +362,7 @@ server.post('/signin', async (req, res) => {
         const passwordMatch = await bcrypt.compare(password, user.personal_info.password);
 
         if (!passwordMatch) {
-            return res.status(401).json({ error: 'Incorrect password' });
+            return res.status(400).json({ error: 'Incorrect password' });
         }
 
         const refreshToken = crypto.randomBytes(64).toString('hex')
@@ -363,7 +375,7 @@ server.post('/signin', async (req, res) => {
         res.cookie("refreshToken", refreshToken, {
             httpOnly: true,
             secure: true,
-            sameSite: "None",
+            sameSite: "Lax",
             maxAge: 7 * 24 * 60 * 60 * 1000,
         })
 
@@ -417,6 +429,20 @@ server.post('/google-auth', async (req, res) => {
             user = await user.save();
         }
 
+        const refreshToken = crypto.randomBytes(64).toString('hex')
+        await RefreshToken.create({
+            token: refreshToken,
+            userId: user._id,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        })
+
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: "Lax",
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        })
+
         return res.status(200).json(formatResult(user));
 
     } catch (err) {
@@ -434,9 +460,9 @@ server.post('/logout', verifyJWT, async (req, res) => {
         res.clearCookie("refreshToken", {
             httpOnly: true,
             secure: true,
-            sameSite: "None",
+            sameSite: "Lax",
         });
-        
+
 
         return res.status(200).json({ result: true })
 
@@ -474,30 +500,7 @@ server.post('/refresh', async (req, res) => {
             return res.status(404).json({ error: 'User not found', access_token: null });
         }
 
-        // ✅ Generate new access token
-        const newAccessToken = jwt.sign(
-            { id: user._id },
-            process.env.SECRET_ACCESS_KEY,
-            { expiresIn: '10m' }
-        );
-
-        // (Optional) Rotate refresh token → prevents token theft replay
-        const newRefreshToken = crypto.randomBytes(64).toString('hex');
-        storedToken.token = newRefreshToken;
-        storedToken.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-        await storedToken.save();
-
-        // Set new refresh token in cookie
-        res.cookie("refreshToken", newRefreshToken, {
-            httpOnly: true,
-            secure: true,
-            sameSite: "None",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
-
-        return res.status(200).json({
-            access_token: newAccessToken,
-        });
+        return res.status(200).json(formatResult(user));
 
     } catch (err) {
         console.error('Error refreshing token:', err);
@@ -1330,7 +1333,7 @@ server.post('/user-written-blogs', verifyJWT, async (req, res) => {
 })
 
 // DONE: Delete all images inside this blog when deleting.
-// TODO: Implement refresh token / cookie storage and storing tokens in db.
+// DONE: Implement refresh token / cookie storage and storing tokens in db.
 server.post('/delete-blog', verifyJWT, async (req, res) => {
 
     const user_id = req.user

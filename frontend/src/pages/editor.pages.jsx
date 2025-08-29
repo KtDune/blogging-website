@@ -55,9 +55,11 @@ const Editor = () => {
     }
 
     return (
-        <EditorContext.Provider value={{ blog, setBlog, editorState, setEditorState, textEditor, setTextEditor }}>
-            {editorState === "editor" ? <BlogEditor /> : <PublishForm />}
-        </EditorContext.Provider>
+        Boolean(blog?.title !== undefined || blog?.title !== null)
+            ? <EditorContext.Provider value={{ blog, setBlog, editorState, setEditorState, textEditor, setTextEditor }}>
+                {editorState === "editor" ? <BlogEditor /> : <PublishForm />}
+            </EditorContext.Provider>
+            : <></>
     )
 }
 
