@@ -1155,6 +1155,7 @@ server.post('/delete-comment', verifyJWT, async (req, res) => {
 })
 
 // TODO: Implement forgot password on user login page, an email needs to be sent to the user to verify if the account holder is sending the change password request.
+// TODO: Implement CSRF checking
 // DONE: currentPassword and newPassword should not be the same
 server.post('/change-password', verifyJWT, async (req, res) => {
     const user_id = req.user;
