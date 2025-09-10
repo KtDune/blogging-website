@@ -23,6 +23,7 @@ import RefreshToken from './Schema/Refresh.js'
 import { ServerError } from './ServerError.js'
 import crypto, { randomUUID } from 'crypto';
 import cookieParser from 'cookie-parser';
+import { doubleCsrf } from 'csrf-csrf';
 
 const server = express()
 const require = createRequire(import.meta.url)
@@ -56,10 +57,22 @@ server.use(cors({
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
 }))
+
+const csrf = doubleCsrf({
+    getSecret: () => process.env.SECRET_CSRF_KEY,
+    getTokenFromRequest: req => req.body.csrfToken,
+    cookieName: process.env.NODE_ENV === 'production' ? '__Host-prod.x-csrf-token' : '_csrf',
+    getSessionIdentifier: (req) => req.session.id,
+    cookieOptions: {
+        secure: process.env.NODE_ENV === 'production' // Enable for HTTPS in production
+    }
+})
+
 server.use(express.json())
 server.use(limiter)
 server.use(slower)
 server.use(cookieParser())
+// server.use(csrf.doubleCsrfProtection);
 
 admin.initializeApp({
     credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_ADMIN_JSON)),
@@ -120,7 +133,7 @@ const generateUsername = async (email) => {
 }
 
 const formatResult = (user) => {
-    const access_token = jwt.sign({ id: user._id }, process.env.SECRET_ACCESS_KEY, { expiresIn: '15m' })
+    const access_token = jwt.sign({ id: user._id }, process.env.SECRET_ACCESS_KEY, { expiresIn: '1h' })
 
     return {
         access_token,
@@ -303,19 +316,19 @@ server.post('/signup', async (req, res) => {
 
         const savedUser = await user.save()
 
-        const refreshToken = crypto.randomBytes(64).toString('hex')
-        await RefreshToken.create({
-            token: refreshToken,
-            userId: savedUser._id,
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        })
+        // const refreshToken = crypto.randomBytes(64).toString('hex')
+        // await RefreshToken.create({
+        //     token: refreshToken,
+        //     userId: savedUser._id,
+        //     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        // })
 
-        res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
-            secure: true,
-            sameSite: "Lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        })
+        // res.cookie("refreshToken", refreshToken, {
+        //     httpOnly: true,
+        //     secure: true,
+        //     sameSite: "Lax",
+        //     maxAge: 7 * 24 * 60 * 60 * 1000,
+        // })
 
         return res.status(200).json(formatResult(savedUser));
 
@@ -364,19 +377,19 @@ server.post('/signin', async (req, res) => {
             return res.status(400).json({ error: 'Incorrect password' });
         }
 
-        const refreshToken = crypto.randomBytes(64).toString('hex')
-        await RefreshToken.create({
-            token: refreshToken,
-            userId: user._id,
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        })
+        // const refreshToken = crypto.randomBytes(64).toString('hex')
+        // await RefreshToken.create({
+        //     token: refreshToken,
+        //     userId: user._id,
+        //     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        // })
 
-        res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
-            secure: true,
-            sameSite: "Lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        })
+        // res.cookie("refreshToken", refreshToken, {
+        //     httpOnly: true,
+        //     secure: true,
+        //     sameSite: "Lax",
+        //     maxAge: 7 * 24 * 60 * 60 * 1000,
+        // })
 
         return res.status(200).json(formatResult(user));
 
@@ -428,19 +441,19 @@ server.post('/google-auth', async (req, res) => {
             user = await user.save();
         }
 
-        const refreshToken = crypto.randomBytes(64).toString('hex')
-        await RefreshToken.create({
-            token: refreshToken,
-            userId: user._id,
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        })
+        // const refreshToken = crypto.randomBytes(64).toString('hex')
+        // await RefreshToken.create({
+        //     token: refreshToken,
+        //     userId: user._id,
+        //     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        // })
 
-        res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
-            secure: true,
-            sameSite: "Lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        })
+        // res.cookie("refreshToken", refreshToken, {
+        //     httpOnly: true,
+        //     secure: true,
+        //     sameSite: "Lax",
+        //     maxAge: 7 * 24 * 60 * 60 * 1000,
+        // })
 
         return res.status(200).json(formatResult(user));
 
@@ -477,6 +490,16 @@ server.post('/logout', async (req, res) => {
         return res.status(500).json({ error: 'Internal server error.' })
     }
 
+})
+
+server.get('csrf', (req, res,) => {
+    try {
+        const csrfToken = csrf.generateCsrfToken(req, res);
+        return res.status(200).json({ csrfToken })
+    }
+    catch (err) {
+        return res.status(500).json({ err })
+    }
 })
 
 server.post('/refresh', async (req, res) => {
