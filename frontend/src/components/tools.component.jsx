@@ -217,7 +217,7 @@ export const fetchBlogInManage = async ({ page, query, draft, access_token }) =>
 
     }
     catch (error) {
-        console.econsole.error(error.response?.data?.error || error.message)
+        console.error(error.response?.data?.error || error.message)
         return []
     }
 

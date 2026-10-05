@@ -24,6 +24,10 @@ export const getWeatherCondition = (weatherString) => {
 
     const englishForecast = forecastEnglish[weatherString]
 
+    if (!englishForecast) {
+        return 'unknown'
+    }
+
     // Check for hazy condition
     if (englishForecast.toLowerCase().includes('hazy')) {
         return 'hazy';
